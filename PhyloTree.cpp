@@ -11,11 +11,10 @@
 
 struct node
 {
-	int down;
-	int up[2];
-	double bl;
+	node *parent;
 	node *left;
 	node *right;
+	double branchLength;
 	int regime;
 	int numIndividuals;
 	int level;
@@ -24,15 +23,15 @@ struct node
 class PhyloTree
 {
 	public:
-		PhyloTree(int numSpecies, int numGenes, int totalIndividuals, int verbose);
+		PhyloTree(int numGenes, int verbose, std::string *treeFile, std::string *individualsFile);
 		~PhyloTree();
 
-		void insert(int key);
-		node *search(int key);
+		void insert(double key);
+		node *search(double key);
 		void destroyTree();
 
-		int readTree(std::string fileName);
-
+		int readTree(std::string *fileName);
+		int readNIndividuals(std::string *fileName);
 
 	private:
 		int totalIndividuals;
@@ -40,6 +39,9 @@ class PhyloTree
 		int numSpecies;
 		int verbose;
 		int nodeStack;
+
+		std::string *treeFile;
+		std::string *individualsFile;
 		
 		std::vector <std::vector <double> > expressionData;
 		std::vector <std::vector <double> > technicalVariance;
@@ -47,20 +49,22 @@ class PhyloTree
 		node *root;
 
 		void destroyTree(node *leaf);
-		void insert(int key, node *leaf);
-		node *search(int key, node *leaf);
+		void insert(double key, node *leaf);
+		node *search(double key, node *leaf);
 };
 	
-	// Constructor for our trees
-PhyloTree::PhyloTree(int numSpecies, int numGenes, int totalIndividuals, int verbose)
+// Constructor for our trees
+PhyloTree::PhyloTree(int numGenes,int verbose, std::string *treeFile, std::string *individualsFile)
 {
 	root = NULL;
 
-	// Assign the values to numSpecies, numGenes, and verbose
-	this->numSpecies = numSpecies;
-	this->numGenes = numGenes;
-	this->totalIndividuals = totalIndividuals;
+	// Assign the values to our member variables
 	this->verbose = verbose;
+	this->treeFile = treeFile;
+	this->individualsFile = individualsFile;
+	this->numSpecies = this->readTree(this->treeFile);
+	this->totalIndividuals = this->readNIndividuals(this->individualsFile);
+	
 	/* expressionData is initialized as a vector with numGenes vectors as rows and 
 	totalIndividuals doubles as columns within those rows */
 	std::vector <std::vector <double> > expressionData (numGenes, std::vector <double> (totalIndividuals)); 
@@ -69,6 +73,7 @@ PhyloTree::PhyloTree(int numSpecies, int numGenes, int totalIndividuals, int ver
 	totalIndividuals doubles as columns within those rows. The values for all indices are then set to 0
 	*/
 	std::vector <std::vector <double> > technicalVariance (numGenes, std::vector <double> (totalIndividuals, 0.0));
+
 }
 
 /* The destructor for our trees; since our vectors are not dynamically allocated,
@@ -90,12 +95,92 @@ void PhyloTree::destroyTree(node *leaf)
 	}
 }
 
-int PhyloTree::readTree(std::string fileName)
+
+/*A basic insertion function for our binary tree */
+void PhyloTree::insert(double key, node *leaf)
+{
+	if(key < leaf->branchLength)
+	{
+		if(leaf->left != NULL)
+			insert(key, leaf->left);
+		else
+		{
+			leaf->left = new node;
+			leaf->left->branchLength = key;
+			/* When creating a new node create a left and right child for it, but set them to null
+			 * because they currently hold nothing and/or may not be needed. Also set the parent
+			 * for the node as the leaf from which it came
+			 */
+			leaf->left->parent = leaf;
+			leaf->left->left = NULL;
+			leaf->left->right = NULL;
+		}
+	}
+	else if(key >= leaf->branchLength)
+	{
+		if(leaf->right != NULL)
+			insert(key, leaf->right);
+		else
+		{
+			leaf->right = new node;
+			leaf->right->branchLength = key;
+			leaf->right->parent = leaf;
+			leaf->right->left = NULL;
+			leaf->right->right = NULL;
+		}
+	}
+}
+
+/* A function for recursively searching for a specific node from our tree */
+node *PhyloTree::search(double key, node *leaf)
+{
+	if(leaf != NULL)
+	{
+		if (key == leaf->branchLength)
+			return leaf;
+		if(key < leaf->branchLength)
+			return search(key, leaf->left);
+		else
+			return search(key, leaf->right);
+	}
+	else return NULL;
+}
+
+/* This is the public version of the insert function. It handles the case in which the root is not yet initialized
+ * by the allocating memory for it and setting both child nodes to null. If the root exists
+ * the recursive insert function is called
+ */
+void PhyloTree::insert(double key)
+{
+	if(root != NULL)
+		insert(key, root);
+	else
+	{
+		root = new node;
+		root->branchLength = key;
+		root->left = NULL;
+		root->right = NULL;
+	}
+}
+
+/* This is the public version of the search function. It begins with the root node */
+node *PhyloTree::search(double key)
+{
+	return search(key, root);
+}
+
+/*This is the public version of the destroy tree function */
+void PhyloTree::destroyTree()
+{
+	destroyTree(root);
+}
+
+int PhyloTree::readTree(std::string *fileName)
 {
 	/* Open our file represented by the fileName variable. Note that
 	ifstream's constructor works only with c strings
 	*/
-	std::ifstream treeFile(fileName.c_str());
+	std::ifstream treeFile(fileName->c_str());
 	int numSpecies;
 	char c;
 
@@ -124,7 +209,7 @@ int PhyloTree::readTree(std::string fileName)
 		}
 
 		/*Loop to ensure that our input file is of the format we need. There
-		should be a new line before the EOF, or else thrown an exception,
+		should be a new line before the EOF, or else throw an exception,
 		which should be caught in main */
 		while(treeFile.get(c))
 		{
@@ -137,7 +222,7 @@ int PhyloTree::readTree(std::string fileName)
 				break;
 		}
 
-		for(int i = 0; i < numSpecies; i++)
+		/*for(int i = 0; i < numSpecies; i++)
 		{
 			this->root[i].up[0] = -1;
 			this->root[i].up[1] = -1;
@@ -146,12 +231,38 @@ int PhyloTree::readTree(std::string fileName)
 		int root = 2 * numSpecies - 2;
 		this->nodeStack = root;
 		this->root[root].down = -1;
+		*/
 		//getclade();
 
 		treeFile.close();
 
 		//addLevelsRecurse(root, 0);
+		
 	}
 
 	return numSpecies;
+}
+
+int PhyloTree::readNIndividuals(std::string *fileName)
+{
+	int totalIndividuals = 0;
+	std::ifstream treeFile(fileName->c_str());
+
+	if(this->verbose > 1)
+		std::cout << "Reading number of individuals file" << std::endl;
+
+	if(!treeFile.is_open())
+	{
+		std::cout << "Cannon open number of individuals file" << std::endl;
+		throw std::exception();
+	}
+
+	/*for(int i = 0; i < this->numSpecies; i++)
+	{
+		treefile >> this->node[i]->numIndividuals;
+		totalIndividuals += this->node[i]->numIndividuals;
+	}*/
+	
+	treeFile.close();
+	return totalIndividuals;	
 }

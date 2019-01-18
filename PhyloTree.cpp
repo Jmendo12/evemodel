@@ -28,6 +28,7 @@ class PhyloTree
 
 		void insert(double key);
 		node *search(double key);
+		node *postOrderTraverse();
 		void destroyTree();
 
 		int readTree(std::string *fileName);
@@ -65,7 +66,7 @@ PhyloTree::PhyloTree(int numGenes,int verbose, std::string *treeFile, std::strin
 	this->numSpecies = this->readTree(this->treeFile);
 	this->totalIndividuals = this->readNIndividuals(this->individualsFile);
 	
-	/* expressionData is initialized as a vector with numGenes vectors as rows and 
+/* expressionData is initialized as a vector with numGenes vectors as rows and 
 	totalIndividuals doubles as columns within those rows */
 	std::vector <std::vector <double> > expressionData (numGenes, std::vector <double> (totalIndividuals)); 
 
@@ -167,6 +168,20 @@ void PhyloTree::insert(double key)
 node *PhyloTree::search(double key)
 {
 	return search(key, root);
+}
+
+/* The following function is a post order traversal of our trees. It will return nodes starting from
+ * the left subtree, right subtree, and then the root. For example, consider the following tree
+ * 5    3   1
+ *  \    \  /
+ *   \    2
+ *    \  /
+ *     4
+ * The order of traversal will be 1,3,2,5,4
+ */
+node *PhyloTree::postOrderTraverse()
+{
+	postOrderTraverse(this->root);
 }
 
 /*This is the public version of the destroy tree function */

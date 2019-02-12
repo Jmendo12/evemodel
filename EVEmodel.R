@@ -1,5 +1,6 @@
 #Include all our necessary libraries
 library(ape)
+library(mvtnorm)
 
 ## Phylogengy Implementation
 # Initiliaze the phylogeny data and plot the phylogeny
@@ -87,7 +88,7 @@ calculateParams <- function(gene.data, num.indivs)
 # Expectation and variance from phylogeny
 # Use this function to calculate expected species mean, and evolutionary
 # variance for each node, given theta, alpha, and sigma^2 for each edge
-calcExpVarOU <- function(tree, thetas, alphas, sigmas.sqaured, 
+calcExpVarOU <- function(tree, theta, alpha, sigma.sqaured, 
                          rootVar, rootE)
 {
   # Declare vectors of expectation values and variances for all tips
@@ -110,10 +111,10 @@ calcExpVarOU <- function(tree, thetas, alphas, sigmas.sqaured,
     parent.index <- tree$edge[i, 1]
     child.index <- tree$edge[i, 2]
     delta.T <- tree$edge.length[i]
-    expected.mean[child.index] <- expected.mean[parent.index] * exp(-alphas[i] * delta.T) +
-      thetas[i] * (1 - exp(-alphas[i] * delta.T))
-    evol.variance[child.index] <- evol.variance[parent.index] * exp(-2 * alphas[i] * delta.T) +
-      sigmas.sqaured[i] / (2 * alphas[i]) * (1 - exp(-2 * alphas[i] * delta.T))
+    expected.mean[child.index] <- expected.mean[parent.index] * exp(-alpha * delta.T) +
+      theta * (1 - exp(-alpha * delta.T))
+    evol.variance[child.index] <- evol.variance[parent.index] * exp(-2 * alpha * delta.T) +
+      sigma.sqaured / (2 * alpha) * (1 - exp(-2 * alpha * delta.T))
   }
   
   return(data.frame(expected.mean, evol.variance))
@@ -122,11 +123,11 @@ calcExpVarOU <- function(tree, thetas, alphas, sigmas.sqaured,
 # Covaraince from phylogeny
 
 # Use this function to calculate the covariance matrix given alpha for each edge
-calcCovMatOU <- function(tree, alphas, evol.variance)
+calcCovMatOU <- function(tree, alpha, evol.variance)
 {
   # Copy the phylogeny and multiply edge lengths with alpha
   attenuationTree <- tree
-  attenuationTree$edge.length <- attenuationTree$edge.length * alphas
+  attenuationTree$edge.length <- attenuationTree$edge.length * alpha
   
   # calculate the attenuation matrix using the cophenetic distance function
   attenuation.Matrix <- cophenetic(attenuationTree)
@@ -140,9 +141,9 @@ calcCovMatOU <- function(tree, alphas, evol.variance)
 
 # Use this function to add within-species variance. This will expand
 # the covariance matrix and species mean vector to account for within-species variance
-expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, beta, num.indiv )
+expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, beta, num.indivs )
 {
-  index.expand <- rep(1:length(num.indiv), num.indiv)
+  index.expand <- rep(1:length(num.indivs), num.indivs)
   
   # Expand covariance matrix
   covar.matrix <- covar.matrix[index.expand, index.expand]
@@ -158,47 +159,44 @@ expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, 
 # Maximum likelihood estimations
 
 # The logLikOU is the function which we maximize over
-logLikOU <- function(param.matrix)
+logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
 {
   # Create vectors of paramters to pass into the function for calculating expression variance 
-  thetas <- c(param.matrix[,1])
-  sigmas.squared <- c(param.matrix[, 2])
-  alphas <- c(param.matrix[, 3])
+  theta <- param.matrix.row[1]
+  sigma.squared <- param.matrix.row[2]
+  alpha <- param.matrix.row[3]
+  beta <- param.matrix.row[4]
   
   # Define the expected species mean for the root and the evolutionary variance for the root
-  expected.species.mean.root <- thetas[1]
-  evol.var.root <- sigmas.squared[1] / (2 * alphas[1])
+  expected.species.mean.root <- theta
+  evol.var.root <- sigma.squared / (2 * alpha)
   
-  expression.var <- calcExpVarOU(tree, thetas, alphas, sigmas.squared, evol.var.root, expected.species.mean.root)
-  covar.matrix <- calcCovMatOU(tree, alphas, expression.var$evol.variance)
-  #expanded.matrix <- expandECovMatrix(expression.var$expected.mean, covar.matrix, )
+  expression.var <- calcExpVarOU(tree, theta, alpha, sigma.squared, evol.var.root, expected.species.mean.root)
+  covar.matrix <- calcCovMatOU(tree, alpha, expression.var$evol.variance)
+  expanded.matrix <- expandECovMatrix(expression.var$expected.mean, covar.matrix, sigma.squared, alpha, beta, num.indivs)
+  
+  # Get log likelihood from the multivariate normal distribution density
+  dmvnorm(gene.data.row, expanded.matrix$expected.mean, expanded.matrix$covar.matrix, log = TRUE )
   
 }
 
 # Use this function to optimize over the paramaters and compute a per gene likelihood
-calcuateLLPerGene <- function(param.matrix)
+calculateLLPerGene <- function(param.matrix, tree, gene.data, num.indivs)
 {
   ll <- vector(mode = "numeric", length = nrow(param.matrix))
   
   for(row in 1:nrow(param.matrix))
   {
-    ll[row] <- -optim(param.matrix[row,], logLikOU, method = "L-BFGS-B")
+    ll[row] <- -optim(par = param.matrix[row,], fn = logLikOU, gr = NULL, tree, gene.data[row,], num.indivs, method = "L-BFGS-B")
   }
   
   return(ll)
 }
 
 # Use this function to calculate the total likelihood 
-calculaeTotalLL <- function(ll.pergene)
+calculateTotalLL <- function(ll.pergene)
 {
-  llTotal <- ll.pergene[1]
-  
-  for(row in 2:nrow(ll.pergene))
-  {
-    # TODO: Find the formula for this 
-    # llTotal <- 
-  }
-  
+  llTotal <- prod(ll.pergene)
   return(llTotal)
 }
 
@@ -214,9 +212,11 @@ divergence.diversity.test <- function()
   gene.data <- getExprData(num.indivs)
   
   #Calculate the per gene parameter matrix based on the gene data
-  paramater.matrix <- calculateParams(gene.data, num.indivs)
+  param.matrix <- calculateParams(gene.data, num.indivs)
   
-  ll.pergene <- calculateLLPerGene(param.matrix)
+  ll.pergene <- calculateLLPerGene(param.matrix, tree, gene.data, num.indivs)
   
   ll.total <- calculateTotalLL(ll.pergene)
+  
+  return(ll.total)
 }

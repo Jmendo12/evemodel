@@ -51,7 +51,7 @@ calculateParams <- function(gene.data, num.indivs)
   # Create vectors in which to store the mean value of data per species per row and the variance within species
   species.mean <- vector(mode = "numeric", length = length(num.indivs))
   species.var <- vector(mode = "numeric", length = length(num.indivs))
-  alpha <- .1
+  alpha <- .5
   
   # For each row within the paramater matrix, fill each column with parameter values
   for(row in 1:nrow(param.matrix))
@@ -78,8 +78,6 @@ calculateParams <- function(gene.data, num.indivs)
     param.matrix[row, 2] <- var(species.mean)
     param.matrix[row, 3] <- alpha
     param.matrix[row, 4] <- mean(species.var) / param.matrix[row, 2]
-    
-    alpha <- alpha + .1
       
   }
   return(param.matrix)
@@ -146,20 +144,20 @@ expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, 
   index.expand <- rep(1:length(num.indivs), num.indivs)
   
   # Expand covariance matrix
-  covar.matrix <- covar.matrix[index.expand, index.expand]
+  covar.matrix.exp <- matrix(covar.matrix, length(index.expand), length(index.expand))
   # Add within species variance
-  diag(covar.matrix) <- diag(covar.matrix) + beta * sigma.sqaured / (2 * alpha)
+  diag(covar.matrix.exp) <- diag(covar.matrix.exp) + beta * sigma.sqaured / (2 * alpha)
   
   # Expand expected values
-  expected.mean <- expected.mean[index.expand]
+  expected.mean.exp <- expected.mean[index.expand]
   
-  return(list(covar.matrix, expected.mean))
+  return(list(cov.matr = covar.matrix.exp, expected.mean = expected.mean.exp))
 }
 
 # Maximum likelihood estimations
 
 # The logLikOU is the function which we maximize over
-logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
+logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs, row)
 {
   # Create vectors of paramters to pass into the function for calculating expression variance 
   theta <- param.matrix.row[1]
@@ -171,12 +169,13 @@ logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
   expected.species.mean.root <- theta
   evol.var.root <- sigma.squared / (2 * alpha)
   
+  
   expression.var <- calcExpVarOU(tree, theta, alpha, sigma.squared, evol.var.root, expected.species.mean.root)
   covar.matrix <- calcCovMatOU(tree, alpha, expression.var$evol.variance)
   expanded.matrix <- expandECovMatrix(expression.var$expected.mean, covar.matrix, sigma.squared, alpha, beta, num.indivs)
   
   # Get log likelihood from the multivariate normal distribution density
-  dmvnorm(gene.data.row, expanded.matrix$expected.mean, expanded.matrix$covar.matrix, log = TRUE )
+  dmvnorm(gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
   
 }
 
@@ -187,7 +186,7 @@ calculateLLPerGene <- function(param.matrix, tree, gene.data, num.indivs)
   
   for(row in 1:nrow(param.matrix))
   {
-    ll[row] <- -optim(par = param.matrix[row,], fn = logLikOU, gr = NULL, tree, gene.data[row,], num.indivs, method = "L-BFGS-B")
+    ll[row] <- -optim(par = param.matrix[row,], fn = logLikOU, gr = NULL, tree, gene.data[row,], num.indivs, row, method = "L-BFGS-B")
   }
   
   return(ll)

@@ -134,7 +134,7 @@ calcCovMatOU <- function(tree, alpha, evol.variance)
   variance.MRCA <- apply(mrca(tree), 1:2, function(i) evol.variance[i])
   
   # Return the covariance matrix
-  return (variance.MRCA * exp(attenuation.Matrix))
+  return (variance.MRCA * exp(-attenuation.Matrix))
 }
 
 # Use this function to add within-species variance. This will expand
@@ -144,7 +144,7 @@ expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, 
   index.expand <- rep(1:length(num.indivs), num.indivs)
   
   # Expand covariance matrix
-  covar.matrix.exp <- matrix(covar.matrix, length(index.expand), length(index.expand))
+  covar.matrix.exp <- covar.matrix[index.expand, index.expand]
   # Add within species variance
   diag(covar.matrix.exp) <- diag(covar.matrix.exp) + beta * sigma.sqaured / (2 * alpha)
   
@@ -157,7 +157,7 @@ expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, 
 # Maximum likelihood estimations
 
 # The logLikOU is the function which we maximize over
-logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs, row)
+logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
 {
   # Create vectors of paramters to pass into the function for calculating expression variance 
   theta <- param.matrix.row[1]
@@ -175,20 +175,14 @@ logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs, row)
   expanded.matrix <- expandECovMatrix(expression.var$expected.mean, covar.matrix, sigma.squared, alpha, beta, num.indivs)
   
   # Get log likelihood from the multivariate normal distribution density
-  dmvnorm(gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
+  dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
   
 }
 
 # Use this function to optimize over the paramaters and compute a per gene likelihood
-calculateLLPerGene <- function(param.matrix, tree, gene.data, num.indivs)
+calculateLLPerGene <- function(param.matrix.row, tree, gene.data.row, num.indivs)
 {
-  ll <- vector(mode = "numeric", length = nrow(param.matrix))
-  
-  for(row in 1:nrow(param.matrix))
-  {
-    ll[row] <- -optim(par = param.matrix[row,], fn = logLikOU, gr = NULL, tree, gene.data[row,], num.indivs, row, method = "L-BFGS-B")
-  }
-  
+  ll <- -logLikOU(param.matrix.row, tree, gene.data.row, num.indivs)
   return(ll)
 }
 
@@ -213,7 +207,13 @@ divergence.diversity.test <- function()
   #Calculate the per gene parameter matrix based on the gene data
   param.matrix <- calculateParams(gene.data, num.indivs)
   
-  ll.pergene <- calculateLLPerGene(param.matrix, tree, gene.data, num.indivs)
+  ll.pergene <- vector(mode = "numeric", length = nrow(param.matrix))
+  
+  for(row in 1:length(ll.pergene))
+  {
+    ll[row] <- optim(param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], num.indivs,
+                     method = "L-BFGS-B")
+  }
   
   ll.total <- calculateTotalLL(ll.pergene)
   

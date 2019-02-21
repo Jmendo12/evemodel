@@ -156,7 +156,6 @@ expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, 
 
 # Maximum likelihood estimations
 
-# The logLikOU is the function which we maximize over
 logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
 {
   # Create vectors of paramters to pass into the function for calculating expression variance 
@@ -175,11 +174,10 @@ logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
   expanded.matrix <- expandECovMatrix(expression.var$expected.mean, covar.matrix, sigma.squared, alpha, beta, num.indivs)
   
   # Get log likelihood from the multivariate normal distribution density
-  dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
-  
+  ll <- dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
+  return(ll)
 }
 
-# Use this function to optimize over the paramaters and compute a per gene likelihood
 calculateLLPerGene <- function(param.matrix.row, tree, gene.data.row, num.indivs)
 {
   ll <- -logLikOU(param.matrix.row, tree, gene.data.row, num.indivs)
@@ -208,11 +206,13 @@ divergence.diversity.test <- function()
   param.matrix <- calculateParams(gene.data, num.indivs)
   
   ll.pergene <- vector(mode = "numeric", length = nrow(param.matrix))
+  max.params <- list()
   
   for(row in 1:length(ll.pergene))
   {
-    ll[row] <- optim(param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], num.indivs,
-                     method = "L-BFGS-B")
+    max.params <- optim(param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], num.indivs,
+                     method = "L-BFGS-B", lower = c(.001, .001))
+    ll.pergene[row] <- as.numeric(max.params[2])
   }
   
   ll.total <- calculateTotalLL(ll.pergene)

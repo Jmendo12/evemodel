@@ -1,44 +1,13 @@
+# This file contains functions to test for divergence and diversity between genes within species 
+# assuming an individual beta value for each gene. To run the test as a whole execute the function 
+# divergence.diversity.test. The total likelihood result will be returned from the function.
+# The full results will be stored to an .RData file; to view these results call load("./results/dvdtresults.RData"). 
+# Author: Rori Rohlfs, Lars Gronvold, John Mendoza
+# Date 2/25/19
+
 #Include all our necessary libraries
-library(ape)
 library(mvtnorm)
-
-## Phylogengy Implementation
-# Initiliaze the phylogeny data and plot the phylogeny
-initializePhylogeny <- function()
-{
-  # Read in the filename the phylogeny is stored in
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the phylogeny data is stored, and include the file extension: "))
-  # Create a tree from the file given by the user
-  tree <- read.tree(fileName)
-  # Reset the margins
-  par(mar = c(5, 4, 4, 2) + 0.1)
-  # Plot the tree so the edge, node numbers, and tip labels are shown
-  plot.phylo(tree, type = "p", show.tip.label = T, label.offset = .05, y.lim = c(.5, 5.5), no.margin = F)
-  nodelabels(text = 1 : (Ntip(tree) + Nnode(tree)), node = 1 : (Ntip(tree) + Nnode(tree)), frame = "circle")
-  edgelabels(frame = "none", col = "red", adj = c(.5, -.1))
-  axisPhylo(1)
-  
-  return(tree)
-}
-
-# Use this function to get the data on the number of samples per species
-getIndividuals <- function()
-{
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the number of samples per species data is stored, and include the file extension: "))
-  num.indivs <- scan(fileName, sep = " ")
-  return(num.indivs)
-}
-
-# Use this function to get the per gene expression data
-getExprData <- function(num.indivs)
-{
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the gene expression data is stored, and include the file extension: "))
-  gene.data <- as.matrix(read.table("data/sampleExpr.dat",skip = 1,header = F,row.names = 1))
-  
-  colnames(gene.data) <- rep(LETTERS[1:5], num.indivs)
-  
-  return(gene.data)
-}
+source('./scripts/eve-io.R')
 
 # Parameter implementation
 # Use this function to get the per gene parameter matrix
@@ -191,6 +160,7 @@ calculateTotalLL <- function(ll.pergene)
   return(llTotal)
 }
 
+# Test for divergence and diversity between genes within species assuming an individual beta value for each gene
 divergence.diversity.test <- function()
 {
   #Initialize the tree
@@ -199,7 +169,7 @@ divergence.diversity.test <- function()
   #Initialize the number of samples per species
   num.indivs <- getIndividuals()
   
-  #Intialize the per gene data
+  #Intialize the gene data
   gene.data <- getExprData(num.indivs)
   
   #Calculate the per gene parameter matrix based on the gene data
@@ -226,3 +196,5 @@ divergence.diversity.test <- function()
   
   return(ll.total)
 }
+
+

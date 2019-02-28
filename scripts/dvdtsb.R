@@ -1,7 +1,7 @@
-# This file contains functions to test for divergence and diversity between genes within species 
-# assuming a shared beta value between genes. To run the test as a whole execute the function 
-# divergence.diversity.test.sharedBeta. The total likelihood result will be returned from the function.
-# The full results will be stored to an .RData file; to view these results call load("./results/dvdtsbresults.RData"). 
+# This file contains functions to calculate gene likelihoods assuming a shared beta value between genes. 
+# To run the calculation as a whole execute the function calculateLLsharedBeta. The total likelihood result
+# will be returned from the function. The full results will be stored to an .RData file; to view these results 
+# call load("./results/llsharedbetaresults.RData"). 
 # Author: Rori Rohlfs, Lars Gronvold, John Mendoza
 # Date 2/25/19
 
@@ -61,7 +61,7 @@ calculateParamsSharedBeta <- function(gene.data, num.indivs)
 }
 
 # Test for divergence and diversity between genes within species assuming a shared beta value between genes
-divergence.diversity.test.sharedBeta <- function()
+calculateLLsharedBeta <- function()
 {
   # Initialize the tree
   tree <- initializePhylogeny()
@@ -96,8 +96,8 @@ divergence.diversity.test.sharedBeta <- function()
   ll.total.sharedBeta <- calculateTotalLL(ll.pergene.sharedBeta)
   
   # Save the results to a file that can be loaded into any future R environment for future use
-  # To load this data simply call load("./results/dvdtsbresults.RData")
-  save(ll.pergene.sharedBeta, ll.total.sharedBeta, file = "./results/dvdtsbresults.RData")
+  # To load this data simply call load("./results/llsharedbetaresults.RData")
+  save(ll.pergene.sharedBeta, ll.total.sharedBeta, file = "./results/llsharedbetaresults.RData")
   
   return(ll.total.sharedBeta)
 }

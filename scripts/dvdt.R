@@ -1,7 +1,7 @@
-# This file contains functions to test for divergence and diversity between genes within species 
-# assuming an individual beta value for each gene. To run the test as a whole execute the function 
-# divergence.diversity.test. The total likelihood result will be returned from the function.
-# The full results will be stored to an .RData file; to view these results call load("./results/dvdtresults.RData"). 
+# This file contains functions to calculate gene likelihoods assuming an individual beta value between genes. 
+# To run the calculation as a whole execute the function calculateLLIndivBeta. The total likelihood result
+# will be returned from the function. The full results will be stored to an .RData file; to view these results 
+# call load("./results/llindivbetaresults.RData"). 
 # Author: Rori Rohlfs, Lars Gronvold, John Mendoza
 # Date 2/25/19
 
@@ -161,7 +161,7 @@ calculateTotalLL <- function(ll.pergene)
 }
 
 # Test for divergence and diversity between genes within species assuming an individual beta value for each gene
-divergence.diversity.test <- function()
+calculateLLIndivBeta <- function()
 {
   #Initialize the tree
   tree <- initializePhylogeny()
@@ -191,8 +191,8 @@ divergence.diversity.test <- function()
   ll.total <- calculateTotalLL(ll.pergene)
   
   # Save the results to a file that can be loaded into any future R environment for future use
-  # To load this data simply call load("./results/dvdtresults.RData")
-  save(ll.pergene, ll.total, file = "./results/dvdtresults.RData")
+  # To load this data simply call load("./results/llindivbetaresults.RData")
+  save(ll.pergene, ll.total, file = "./results/llindivbetaresults.RData")
   
   return(ll.total)
 }

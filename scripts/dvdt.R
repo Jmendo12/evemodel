@@ -127,7 +127,7 @@ expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, 
 
 logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
 {
-  # Create vectors of paramters to pass into the function for calculating expression variance 
+  # Create varaibles with paramters to pass into the function for calculating expression variance 
   theta <- param.matrix.row[1]
   sigma.squared <- param.matrix.row[2]
   alpha <- param.matrix.row[3]
@@ -176,7 +176,7 @@ calculateLLIndivBeta <- function()
   param.matrix <- calculateParams(gene.data, num.indivs)
   
   # Create a vector to hold the values of the likelihood per gene and a list to hold the return values from the call to optim
-  ll.pergene <- vector(mode = "numeric", length = nrow(param.matrix))
+  ll.pergene.IndivBeta <- vector(mode = "numeric", length = nrow(param.matrix))
   max.params <- list()
   
   # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
@@ -184,17 +184,17 @@ calculateLLIndivBeta <- function()
   {
     max.params <- optim(param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], num.indivs,
                      method = "L-BFGS-B", lower = c(.001, .001))
-    ll.pergene[row] <- as.numeric(max.params[2])
+    ll.pergene.IndivBeta[row] <- as.numeric(max.params[2])
   }
   
   # Calculate the total likelihood as the product of all values within the likelihood vector
-  ll.total <- calculateTotalLL(ll.pergene)
+  ll.total.IndivBeta <- calculateTotalLL(ll.pergene.IndivBeta)
   
   # Save the results to a file that can be loaded into any future R environment for future use
   # To load this data simply call load("./results/llindivbetaresults.RData")
-  save(ll.pergene, ll.total, file = "./results/llindivbetaresults.RData")
+  save(ll.pergene.IndivBeta, ll.total.IndivBeta, file = "./results/llindivbetaresults.RData")
   
-  return(ll.total)
+  return(ll.total.IndivBeta)
 }
 
 

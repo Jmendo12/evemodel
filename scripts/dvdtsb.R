@@ -60,6 +60,35 @@ calculateParamsSharedBeta <- function(gene.data, num.indivs)
   return(param.matrix)
 }
 
+make.LogLikOU <- function(tree, gene.data.row, num.indivs, fixed = c(FALSE, FALSE, FALSE, FALSE))
+{
+  params <- fixed
+  
+  function(p)
+  {
+    # Use a boolean vector to determine which paramter to fix for the optimization
+    params[!fixed] <- p[!fixed]
+    
+    # Create variables with paramters to pass into the function for calculating expression variance
+    theta <- params[1]
+    sigma.squared <- params[2]
+    alpha <- params[3]
+    beta <- params[4]
+
+    # Define the expected species mean and evolutionary variance for the root
+    expected.species.mean.root <- theta
+    evol.var.root <- sigma.squared / (2 * alpha)
+    
+    expression.var <- calcExpVarOU(tree, theta, alpha, sigma.squared, evol.var.root, expected.species.mean.root)
+    covar.matrix <- calcCovMatOU(tree, alpha, expression.var$evol.variance)
+    expanded.matrix <- expandECovMatrix(expression.var$expected.mean, covar.matrix, sigma.squared, alpha, beta, num.indivs)
+    
+    # Get log likelihood from the multivariate normal distribution density
+    ll <- dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE)
+    return(-ll)
+  }
+}
+
 # Test for divergence and diversity between genes within species assuming a shared beta value between genes
 calculateLLsharedBeta <- function()
 {
@@ -84,11 +113,25 @@ calculateLLsharedBeta <- function()
   ll.pergene.sharedBeta <- vector(mode = "numeric", length = nrow(param.matrix))
   max.params <- list()
   
-  # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
+  # First, create an environment which contains the function to be optimized, and can hold all values other than beta fixed
+  # during the optimization
+  llOU <- make.LogLikOU(tree, gene.data[1, ], num.indivs, 
+                        c(param.matrix[1, 1], param.matrix[1, 2], param.matrix[1, 3], FALSE))
+  # Next, optimize the beta value for the first row of the initial paramters
+  max.params <- optim(param.matrix[1, ], fn = llOU, gr = NULL, method = "L-BFGS-B", lower = c(.001, .001))
+  # Store the result in a numerical vector, and then set the beta value for all genes as this result
+  vec <- as.numeric(max.params[[1]])
+  param.matrix[, 4] <- vec[4]
+  
+  # For each gene, optimize the parameters keeping the shared beta fixed, and store the resulting likelihood in the likelihood vector
   for(row in 1:length(ll.pergene.sharedBeta))
   {
-    max.params <- optim(param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], num.indivs,
-                        method = "L-BFGS-B", lower = c(.001, .001))
+    # Now, create an enviroment with the function to be optimized, and hold the shared beta value fixed
+    llOU <- make.LogLikOU(tree, gene.data[row, ], num.indivs, 
+                          c(FALSE, FALSE, FALSE, param.matrix[row, 4]))
+    # Store the results of the optimization in a list
+    max.params <- optim(param.matrix[row, ], fn = llOU, gr = NULL, method = "L-BFGS-B", lower = c(.001, .001))
+    # Store the likelihood calculation based on the optimized parameter in a vector
     ll.pergene.sharedBeta[row] <- as.numeric(max.params[2])
   }
   

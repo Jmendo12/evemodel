@@ -1,44 +1,13 @@
+# This file contains functions to calculate gene likelihoods assuming an individual beta value between genes. 
+# To run the calculation as a whole execute the function calculateLLIndivBeta. The total likelihood result
+# will be returned from the function. The full results will be stored to an .RData file; to view these results 
+# call load("./results/llindivbetaresults.RData"). 
+# Author: Rori Rohlfs, Lars Gronvold, John Mendoza
+# Date 2/25/19
+
 #Include all our necessary libraries
-library(ape)
 library(mvtnorm)
-
-## Phylogengy Implementation
-# Initiliaze the phylogeny data and plot the phylogeny
-initializePhylogeny <- function()
-{
-  # Read in the filename the phylogeny is stored in
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the phylogeny data is stored, and include the file extension: "))
-  # Create a tree from the file given by the user
-  tree <- read.tree(fileName)
-  # Reset the margins
-  par(mar = c(5, 4, 4, 2) + 0.1)
-  # Plot the tree so the edge, node numbers, and tip labels are shown
-  plot.phylo(tree, type = "p", show.tip.label = T, label.offset = .05, y.lim = c(.5, 5.5), no.margin = F)
-  nodelabels(text = 1 : (Ntip(tree) + Nnode(tree)), node = 1 : (Ntip(tree) + Nnode(tree)), frame = "circle")
-  edgelabels(frame = "none", col = "red", adj = c(.5, -.1))
-  axisPhylo(1)
-  
-  return(tree)
-}
-
-# Use this function to get the data on the number of samples per species
-getIndividuals <- function()
-{
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the number of samples per species data is stored, and include the file extension: "))
-  num.indivs <- scan(fileName, sep = " ")
-  return(num.indivs)
-}
-
-# Use this function to get the per gene expression data
-getExprData <- function(num.indivs)
-{
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the gene expression data is stored, and include the file extension: "))
-  gene.data <- as.matrix(read.table("data/sampleExpr.dat",skip = 1,header = F,row.names = 1))
-  
-  colnames(gene.data) <- rep(LETTERS[1:5], num.indivs)
-  
-  return(gene.data)
-}
+source('./scripts/eve-io.R')
 
 # Parameter implementation
 # Use this function to get the per gene parameter matrix
@@ -158,7 +127,7 @@ expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, 
 
 logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
 {
-  # Create vectors of paramters to pass into the function for calculating expression variance 
+  # Create varaibles with paramters to pass into the function for calculating expression variance 
   theta <- param.matrix.row[1]
   sigma.squared <- param.matrix.row[2]
   alpha <- param.matrix.row[3]
@@ -191,38 +160,32 @@ calculateTotalLL <- function(ll.pergene)
   return(llTotal)
 }
 
-divergence.diversity.test <- function()
+# Test for divergence and diversity between genes within species assuming an individual beta value for each gene
+calculateLLIndivBeta <- function(tree, num.indivs, gene.data)
 {
-  #Initialize the tree
-  tree <- initializePhylogeny()
-  
-  #Initialize the number of samples per species
-  num.indivs <- getIndividuals()
-  
-  #Intialize the per gene data
-  gene.data <- getExprData(num.indivs)
-  
   #Calculate the per gene parameter matrix based on the gene data
   param.matrix <- calculateParams(gene.data, num.indivs)
   
   # Create a vector to hold the values of the likelihood per gene and a list to hold the return values from the call to optim
-  ll.pergene <- vector(mode = "numeric", length = nrow(param.matrix))
+  ll.pergene.IndivBeta <- vector(mode = "numeric", length = nrow(param.matrix))
   max.params <- list()
   
   # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
-  for(row in 1:length(ll.pergene))
+  for(row in 1:length(ll.pergene.IndivBeta))
   {
     max.params <- optim(param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], num.indivs,
                      method = "L-BFGS-B", lower = c(.001, .001))
-    ll.pergene[row] <- as.numeric(max.params[2])
+    ll.pergene.IndivBeta[row] <- as.numeric(max.params[2])
   }
   
   # Calculate the total likelihood as the product of all values within the likelihood vector
-  ll.total <- calculateTotalLL(ll.pergene)
+  ll.total.IndivBeta <- calculateTotalLL(ll.pergene.IndivBeta)
   
   # Save the results to a file that can be loaded into any future R environment for future use
-  # To load this data simply call load("./results/dvdtresults.RData")
-  save(ll.pergene, ll.total, file = "./results/dvdtresults.RData")
+  # To load this data simply call load("./results/llindivbetaresults.RData")
+  save(ll.pergene.IndivBeta, ll.total.IndivBeta, file = "./results/llindivbetaresults.RData")
   
-  return(ll.total)
+  return(ll.total.IndivBeta)
 }
+
+

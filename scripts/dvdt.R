@@ -161,17 +161,8 @@ calculateTotalLL <- function(ll.pergene)
 }
 
 # Test for divergence and diversity between genes within species assuming an individual beta value for each gene
-calculateLLIndivBeta <- function()
+calculateLLIndivBeta <- function(tree, num.indivs, gene.data)
 {
-  #Initialize the tree
-  tree <- initializePhylogeny()
-  
-  #Initialize the number of samples per species
-  num.indivs <- getIndividuals()
-  
-  #Intialize the gene data
-  gene.data <- getExprData(num.indivs)
-  
   #Calculate the per gene parameter matrix based on the gene data
   param.matrix <- calculateParams(gene.data, num.indivs)
   
@@ -180,7 +171,7 @@ calculateLLIndivBeta <- function()
   max.params <- list()
   
   # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
-  for(row in 1:length(ll.pergene))
+  for(row in 1:length(ll.pergene.IndivBeta))
   {
     max.params <- optim(param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], num.indivs,
                      method = "L-BFGS-B", lower = c(.001, .001))

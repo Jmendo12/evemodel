@@ -90,17 +90,8 @@ make.LogLikOU <- function(tree, gene.data.row, num.indivs, fixed = c(FALSE, FALS
 }
 
 # Test for divergence and diversity between genes within species assuming a shared beta value between genes
-calculateLLsharedBeta <- function()
+calculateLLsharedBeta <- function(tree, num.indivs, gene.data)
 {
-  # Initialize the tree
-  tree <- initializePhylogeny()
-  
-  # Initialize the number of samples per species
-  num.indivs <- getIndividuals()
-  
-  # Initialize the gene data
-  gene.data <- getExprData(num.indivs)
-  
   # Calculate the inital per gene parameter matrix based on the gene data; note that in this version of the function, beta is not
   # calculated as we are under the assumption that beta is shared between genes
   param.matrix <- calculateParamsSharedBeta(gene.data, num.indivs)

@@ -156,7 +156,7 @@ calculateLLPerGene <- function(param.matrix.row, tree, gene.data.row, num.indivs
 # Use this function to calculate the total likelihood 
 calculateTotalLL <- function(ll.pergene)
 {
-  llTotal <- prod(ll.pergene)
+  llTotal <- abs(prod(ll.pergene))
   return(llTotal)
 }
 
@@ -174,7 +174,7 @@ calculateLLIndivBeta <- function(tree, num.indivs, gene.data)
   for(row in 1:length(ll.pergene.IndivBeta))
   {
     max.params <- optim(param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], num.indivs,
-                     method = "L-BFGS-B", lower = c(.001, .001))
+                     method = "L-BFGS-B", lower = c(.000000000000001, .000000000000001, .000000000000001, .000000000000001))
     ll.pergene.IndivBeta[row] <- as.numeric(max.params[2])
   }
   

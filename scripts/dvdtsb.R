@@ -109,7 +109,7 @@ calculateLLsharedBeta <- function(tree, num.indivs, gene.data)
   llOU <- make.LogLikOU(tree, gene.data[1, ], num.indivs, 
                         c(param.matrix[1, 1], param.matrix[1, 2], param.matrix[1, 3], FALSE))
   # Next, optimize the beta value for the first row of the initial paramters
-  max.params <- optim(param.matrix[1, ], fn = llOU, gr = NULL, method = "L-BFGS-B", lower = c(.001, .001))
+  max.params <- optim(param.matrix[1, ], fn = llOU, gr = NULL, method = "L-BFGS-B", lower = c(.000000000000001))
   # Store the result in a numerical vector, and then set the beta value for all genes as this result
   vec <- as.numeric(max.params[[1]])
   param.matrix[, 4] <- vec[4]
@@ -121,7 +121,8 @@ calculateLLsharedBeta <- function(tree, num.indivs, gene.data)
     llOU <- make.LogLikOU(tree, gene.data[row, ], num.indivs, 
                           c(FALSE, FALSE, FALSE, param.matrix[row, 4]))
     # Store the results of the optimization in a list
-    max.params <- optim(param.matrix[row, ], fn = llOU, gr = NULL, method = "L-BFGS-B", lower = c(.001, .001))
+    max.params <- optim(param.matrix[row, ], fn = llOU, gr = NULL, method = "L-BFGS-B", 
+                        lower = c(.000000000000001, .000000000000001, .000000000000001))
     # Store the likelihood calculation based on the optimized parameter in a vector
     ll.pergene.sharedBeta[row] <- as.numeric(max.params[2])
   }

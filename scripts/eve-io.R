@@ -34,12 +34,10 @@ getIndividuals <- function()
 }
 
 # Use this function to get the per gene expression data
-getExprData <- function(num.indivs)
+getExprData <- function(filename)
 {
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the gene expression data is stored, and include the file extension: "))
-  gene.data <- as.matrix(read.table("data/sampleExpr.dat",skip = 1,header = F,row.names = 1))
-  
-  colnames(gene.data) <- rep(LETTERS[1:5], num.indivs)
-  
+  gene.data <- as.matrix(read.table(filename,header = F,skip = 1,row.names = 1))
+  colnames(gene.data) <- scan(filename,nlines = 1,what = character())
+ 
   return(gene.data)
 }

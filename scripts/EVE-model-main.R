@@ -2,6 +2,8 @@
 # Author: Rori Rohlfs, Lars Gronvold, John Mendoza
 # Date: 3/2/2019
 
+library(ape)
+
 source('./scripts/eve-io.R')
 source('./scripts/dvdt.R')
 source('./scripts/dvdtsb.R')
@@ -9,13 +11,13 @@ source('./scripts/dvdtsb.R')
 divergenceDiversityTest <- function()
 {
   # Initialize the tree
-  tree <- initializePhylogeny()
-  
-  # Initialize the number of samples per species
-  num.indivs <- getIndividuals()
+  tree <- read.tree("data/examplePhylo2.newick")
   
   # Initialize the gene data
-  gene.data <- getExprData(num.indivs)
+  gene.data <- getExprData("data/sampleExpr2.dat")
+  
+  # Initialize the number of samples per species
+  num.indivs <- as.vector(table(colnames(gene.data)))
   
   # Calculate the total likelihoods for the null and alternative hypothesis
   ll.IndivBeta <- calculateLLIndivBeta(tree, num.indivs, gene.data)

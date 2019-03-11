@@ -20,7 +20,7 @@ divergenceDiversityTest <- function()
   num.indivs <- as.vector(table(colnames(gene.data)))
   
   # Calculate the total likelihoods for the null and alternative hypothesis
-  ll.IndivBeta <- calculateLLIndivBeta(tree, num.indivs, gene.data)
+  ll.IndivBeta <- calculateLLIndivBeta(tree, gene.data)
   ll.SharedBeta <- calculateLLsharedBeta(tree, num.indivs, gene.data)
   
   # Calculate the likelihood ratios

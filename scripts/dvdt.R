@@ -9,53 +9,31 @@
 library(mvtnorm)
 source('./scripts/eve-io.R')
 
-# Parameter implementation
-# Use this function to get the per gene parameter matrix
-calculateParams <- function(gene.data, num.indivs)
+#' Estimate initial parameter values without using phylogeny
+#'
+#' @param gene.data A matrix of expression values with samples in columns and genes in rows
+#' @param colSpecies A character vector with same length as columns in gene.data, specifying the 
+#' species for the corresponding column.
+#'
+#' @return A matrix of initial parameters with the parameters in columns and genes in rows
+initialParams <- function(gene.data, colSpecies)
 {
-  # Create the paramater matrix with the same number of rows as genes and one column for each parameter, and then name cols
-  param.matrix <- matrix(nrow = nrow(gene.data), ncol = 4)
-  colnames(param.matrix) <- c("theta", "sigma2", "alpha", "beta")
+  colSpeciesIndices <- split(seq_along(colSpecies), f = colSpecies)
+  species.mean <- sapply(colSpeciesIndices, function(i){ rowMeans(gene.data[,i]) })
+  species.var <- sapply(colSpeciesIndices, function(i){ apply(gene.data[,i],1,var) })
   
-  # Create vectors in which to store the mean value of data per species per row and the variance within species
-  species.mean <- vector(mode = "numeric", length = length(num.indivs))
-  species.var <- vector(mode = "numeric", length = length(num.indivs))
+  theta <- rowMeans(species.mean)
+  sigma2 <- apply(species.mean,1,var)
   alpha <- .5
+  beta <- rowMeans(species.var) / sigma2
   
-  # For each row within the paramater matrix, fill each column with parameter values
-  for(row in 1:nrow(param.matrix))
-  {
-    # These start and end indices define where one species begins and ends for a gene
-    start <- 1
-    end <- num.indivs[1]
-    
-    for(i in 1:length(num.indivs))
-    {
-      # This increments the end point for a species for a gene
-      if(i != 1)
-      {
-        end <- end + num.indivs[i]
-      }
-      # Calculate the mean of expression for each species and the variance of expression for each species
-      species.mean[i] <- mean(gene.data[row, start:end])
-      species.var[i] <- var(gene.data[row, start:end])
-      # This increments the beginning point of a species for a gene
-      start <- start + num.indivs[i]
-    }
-    # Fill the paramter matrix with theta, sigma sqaured, alpha, and beta values
-    param.matrix[row, 1] <- mean(species.mean)
-    param.matrix[row, 2] <- var(species.mean)
-    param.matrix[row, 3] <- alpha
-    param.matrix[row, 4] <- mean(species.var) / param.matrix[row, 2]
-      
-  }
-  return(param.matrix)
+  return(cbind(theta,sigma2,alpha,beta))
 }
 
 # Expectation and variance from phylogeny
 # Use this function to calculate expected species mean, and evolutionary
-# variance for each node, given theta, alpha, and sigma^2 for each edge
-calcExpVarOU <- function(tree, theta, alpha, sigma.sqaured, 
+# variance for each node, given a common theta, alpha, and sigma^2 for all edges
+calcExpVarOU <- function(tree, theta, alpha, sigma.squared, 
                          rootVar, rootE)
 {
   # Declare vectors of expectation values and variances for all tips
@@ -81,7 +59,7 @@ calcExpVarOU <- function(tree, theta, alpha, sigma.sqaured,
     expected.mean[child.index] <- expected.mean[parent.index] * exp(-alpha * delta.T) +
       theta * (1 - exp(-alpha * delta.T))
     evol.variance[child.index] <- evol.variance[parent.index] * exp(-2 * alpha * delta.T) +
-      sigma.sqaured / (2 * alpha) * (1 - exp(-2 * alpha * delta.T))
+      sigma.squared / (2 * alpha) * (1 - exp(-2 * alpha * delta.T))
   }
   
   return(data.frame(expected.mean, evol.variance))
@@ -108,14 +86,12 @@ calcCovMatOU <- function(tree, alpha, evol.variance)
 
 # Use this function to add within-species variance. This will expand
 # the covariance matrix and species mean vector to account for within-species variance
-expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, beta, num.indivs )
+expandECovMatrix <- function(expected.mean, covar.matrix, sigma.squared, alpha, beta, index.expand )
 {
-  index.expand <- rep(1:length(num.indivs), num.indivs)
-  
   # Expand covariance matrix
   covar.matrix.exp <- covar.matrix[index.expand, index.expand]
   # Add within species variance
-  diag(covar.matrix.exp) <- diag(covar.matrix.exp) + beta * sigma.sqaured / (2 * alpha)
+  diag(covar.matrix.exp) <- diag(covar.matrix.exp) + beta * sigma.squared / (2 * alpha)
   
   # Expand expected values
   expected.mean.exp <- expected.mean[index.expand]
@@ -125,7 +101,7 @@ expandECovMatrix <- function(expected.mean, covar.matrix, sigma.sqaured, alpha, 
 
 # Maximum likelihood estimations
 
-logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
+logLikOU <- function(param.matrix.row, tree, gene.data.row, index.expand)
 {
   # Create varaibles with paramters to pass into the function for calculating expression variance 
   theta <- param.matrix.row[1]
@@ -138,18 +114,20 @@ logLikOU <- function(param.matrix.row, tree, gene.data.row, num.indivs)
   evol.var.root <- sigma.squared / (2 * alpha)
   
   
-  expression.var <- calcExpVarOU(tree, theta, alpha, sigma.squared, evol.var.root, expected.species.mean.root)
-  covar.matrix <- calcCovMatOU(tree, alpha, expression.var$evol.variance)
-  expanded.matrix <- expandECovMatrix(expression.var$expected.mean, covar.matrix, sigma.squared, alpha, beta, num.indivs)
+  expression.var <- calcExpVarOU(tree, theta, alpha, sigma.squared, rootVar = evol.var.root, rootE = expected.species.mean.root)
+  covar.matrix <- calcCovMatOU(tree, alpha, evol.variance = expression.var$evol.variance)
+  
+  expanded.matrix <- expandECovMatrix(expected.mean = expression.var$expected.mean,covar.matrix,
+                                      sigma.squared, alpha, beta, index.expand)
   
   # Get log likelihood from the multivariate normal distribution density
   ll <- dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
   return(ll)
 }
 
-calculateLLPerGene <- function(param.matrix.row, tree, gene.data.row, num.indivs)
+calculateLLPerGene <- function(param.matrix.row, tree, gene.data.row, index.expand)
 {
-  ll <- -logLikOU(param.matrix.row, tree, gene.data.row, num.indivs)
+  ll <- -logLikOU(param.matrix.row, tree, gene.data.row, index.expand)
   return(ll)
 }
 
@@ -161,19 +139,22 @@ calculateTotalLL <- function(ll.pergene)
 }
 
 # Test for divergence and diversity between genes within species assuming an individual beta value for each gene
-calculateLLIndivBeta <- function(tree, num.indivs, gene.data)
+calculateLLIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.data))
 {
   #Calculate the per gene parameter matrix based on the gene data
-  param.matrix <- calculateParams(gene.data, num.indivs)
+  initial.param.matrix <- initialParams(gene.data, colSpecies)
+  
+  # match the column species with the phylogeny tip labels
+  index.expand <- match(colSpecies, tree$tip.label)
   
   # Create a vector to hold the values of the likelihood per gene and a list to hold the return values from the call to optim
-  ll.pergene.IndivBeta <- vector(mode = "numeric", length = nrow(param.matrix))
+  ll.pergene.IndivBeta <- vector(mode = "numeric", length = nrow(initial.param.matrix))
   max.params <- list()
   
   # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
   for(row in 1:length(ll.pergene.IndivBeta))
   {
-    max.params <- optim(param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], num.indivs,
+    max.params <- optim(initial.param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], index.expand,
                      method = "L-BFGS-B", lower = c(.000000000000001, .000000000000001, .000000000000001, .000000000000001))
     ll.pergene.IndivBeta[row] <- as.numeric(max.params[2])
   }

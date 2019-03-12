@@ -16,11 +16,22 @@ divergenceDiversityTest <- function()
   # Initialize the gene data
   gene.data <- getExprData("data/sampleExpr2.dat")
   
-  # Initialize the number of samples per species
-  num.indivs <- as.vector(table(colnames(gene.data)))
-  
   # Calculate the total likelihoods for the null and alternative hypothesis
-  ll.IndivBeta <- calculateLLIndivBeta(tree, gene.data)
+  indivBetaRes <- calculateLLIndivBeta(tree, gene.data)
+  
+  ourIndivBetaResultMatrix <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$par} )
+  
+  testResMatrix <- t(as.matrix(read.table("data/indivBetaMLParams_trialRun.res", col.names = names(indivBetaRes[[1]]$par))))
+  
+  ourParamResultMatrix <= testResMatrix * 1.001
+  
+  ourIndivBetaLLs <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$value})
+  
+  testResLLs <- read.table("data/indivBetaMLs_trialRun.res")
+  testResLLsVec <- sapply(testResLLs, function(testResLLsRow) {testResLLsRow})
+  
+  ourIndivBetaLLs <= abs(testResLLs * 1.001)
+  
   ll.SharedBeta <- calculateLLsharedBeta(tree, num.indivs, gene.data)
   
   # Calculate the likelihood ratios

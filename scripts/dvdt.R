@@ -146,27 +146,14 @@ calculateLLIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.dat
   
   # match the column species with the phylogeny tip labels
   index.expand <- match(colSpecies, tree$tip.label)
-  
-  # Create a vector to hold the values of the likelihood per gene and a list to hold the return values from the call to optim
-  ll.pergene.IndivBeta <- vector(mode = "numeric", length = nrow(initial.param.matrix))
-  max.params <- list()
-  
+
   # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
-  for(row in 1:length(ll.pergene.IndivBeta))
-  {
-    max.params <- optim(initial.param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], index.expand,
+  lapply(1:nrow(gene.data), function(row){
+    optim(initial.param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], index.expand,
                      method = "L-BFGS-B", lower = c(.000000000000001, .000000000000001, .000000000000001, .000000000000001))
-    ll.pergene.IndivBeta[row] <- as.numeric(max.params[2])
-  }
-  
-  # Calculate the total likelihood as the product of all values within the likelihood vector
-  ll.total.IndivBeta <- calculateTotalLL(ll.pergene.IndivBeta)
-  
-  # Save the results to a file that can be loaded into any future R environment for future use
-  # To load this data simply call load("./results/llindivbetaresults.RData")
-  save(ll.pergene.IndivBeta, ll.total.IndivBeta, file = "./results/llindivbetaresults.RData")
-  
-  return(ll.total.IndivBeta)
+  }) -> res
+
+  return(res)
 }
 
 

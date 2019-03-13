@@ -11,10 +11,10 @@ source('./scripts/dvdtsb.R')
 divergenceDiversityTest <- function()
 {
   # Initialize the tree
-  tree <- read.tree("data/examplePhylo2.newick")
+  tree <- read.tree("data/salmonidsPhylo.newick")
   
   # Initialize the gene data
-  gene.data <- getExprData("data/sampleExpr2.dat")
+  gene.data <- getExprData("data/salmonidsBSNsglDupA.tsv")
   
   # Calculate the total likelihoods for the null and alternative hypothesis
   indivBetaRes <- calculateLLIndivBeta(tree, gene.data)
@@ -23,14 +23,14 @@ divergenceDiversityTest <- function()
   
   testResMatrix <- t(as.matrix(read.table("data/indivBetaMLParams_trialRun.res", col.names = names(indivBetaRes[[1]]$par))))
   
-  ourParamResultMatrix <= testResMatrix * 1.001
+  ourIndivBetaResultMatrix / testResMatrix
   
   ourIndivBetaLLs <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$value})
   
   testResLLs <- read.table("data/indivBetaMLs_trialRun.res")
   testResLLsVec <- sapply(testResLLs, function(testResLLsRow) {testResLLsRow})
   
-  ourIndivBetaLLs <= abs(testResLLs * 1.001)
+  ourIndivBetaLLs / abs(testResLLs * 1.001)
   
   ll.SharedBeta <- calculateLLsharedBeta(tree, num.indivs, gene.data)
   

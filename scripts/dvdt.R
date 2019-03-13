@@ -146,11 +146,18 @@ calculateLLIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.dat
   
   # match the column species with the phylogeny tip labels
   index.expand <- match(colSpecies, tree$tip.label)
-
+  # Calculate max alpha based on the proportion of variance from covariance
+  alphaMax <- -log(.01) / min(tree$edge.length[tree$edge[,2] <= Ntip(tree)])
+  
   # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
   lapply(1:nrow(gene.data), function(row){
-    optim(initial.param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], index.expand,
-                     method = "L-BFGS-B", lower = c(.000000000000001, .000000000000001, .000000000000001, .000000000000001))
+    # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
+    res <- tryCatch({
+      optim(initial.param.matrix[row, ], fn = calculateLLPerGene, gr = NULL, tree, gene.data[row, ], index.expand,
+            method = "L-BFGS-B", lower = c(-Inf, 1e-10, 1e-10, 1e-10), upper = c(Inf, Inf, alphaMax, Inf))
+    }, error = function(e) {
+      warning(paste(e$message, "Bad data in row", row), immediate. = T)
+    })
   }) -> res
 
   return(res)

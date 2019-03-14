@@ -11,13 +11,15 @@ source('./scripts/dvdtsb.R')
 divergenceDiversityTest <- function()
 {
   # Initialize the tree
-  tree <- read.tree("data/salmonidsPhylo.newick")
+  # tree <- read.tree("data/salmonidsPhylo.newick")
+  tree <- read.tree("data/examplePhylo2.newick")
   
   # Initialize the gene data
-  gene.data <- getExprData("data/salmonidsBSNsglDupA.tsv")
+  # gene.data <- getExprData("data/salmonidsBSNsglDupA.tsv")
+  gene.data <- getExprData("data/sampleExpr2.dat")
   
   # Calculate the total likelihoods for the null and alternative hypothesis
-  indivBetaRes <- calculateLLIndivBeta(tree, gene.data)
+  indivBetaRes <- fitIndivBeta(tree, gene.data)
   
   ourIndivBetaResultMatrix <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$par} )
   

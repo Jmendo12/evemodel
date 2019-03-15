@@ -6,7 +6,6 @@ library(ape)
 
 source('./scripts/eve-io.R')
 source('./scripts/dvdt.R')
-source('./scripts/dvdtsb.R')
 
 divergenceDiversityTest <- function()
 {

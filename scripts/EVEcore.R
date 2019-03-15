@@ -128,14 +128,8 @@ calcExpVarOUconst <- function(tree, theta, alpha, sigma2){
 }
 
 # Likelihood of gene expression with given parameters
-logLikOU <- function(param.matrix.row, tree, gene.data.row, index.expand)
+logLikOU <- function(theta, sigma2, alpha, beta, tree, gene.data.row, index.expand)
 {
-  # Create varaibles with paramters to pass into the function for calculating expression variance 
-  theta <- param.matrix.row[1]
-  sigma2 <- param.matrix.row[2]
-  alpha <- param.matrix.row[3]
-  beta <- param.matrix.row[4]
-  
   # Define the expected species mean for the root and the evolutionary variance for the root
   expected.species.mean.root <- theta
   evol.var.root <- sigma2 / (2 * alpha)

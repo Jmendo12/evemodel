@@ -40,7 +40,7 @@ fitIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.data))
       warning(paste(e$message, "at gene.data row", row), immediate. = T)
     })
   }) -> res
-
+  
   return(res)
 }
 
@@ -102,7 +102,18 @@ betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data)){
                             tree=tree, gene.data=gene.data)
   # fit using sharedBeta
   sharedBeta <- sharedBetaFit$minimum
+  sharedBetaRes <- fitSharedBeta(sharedBeta, tree, gene.data)
   
   # calculate Log likelihood ratio
-  return( list(indivBetaRes, sharedBetaRes, LLRatio) )
+  LLRatios <- mapply(function(indivBetaRow, sharedBetaRow)
+    {
+      (2 * -(indivBetaRow$value)) - (2 * -(sharedBetaRow$value))
+    }, indivBetaRes, sharedBetaRes)
+  
+  sumLLIndivBeta <- sum(sapply(indivBetaRes, function(row) {row$value} ))
+  
+  totalLLRatio <- (-2 * log(sumLLIndivBeta) - (-2 * log(sharedBetaFit$objective)))
+  
+  return( list(indivBetaRes = indivBetaRes, sharedBeta = sharedBeta, sharedBetaRes = sharedBetaRes, 
+               LLRatios = LLRatios, totalLLRatio = totalLLRatio) )
 }

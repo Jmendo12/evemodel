@@ -9,6 +9,7 @@ getExprData <- function(filename)
 {
   gene.data <- as.matrix(read.table(filename,header = F,skip = 1,row.names = 1))
   colnames(gene.data) <- scan(filename,nlines = 1,what = character())
- 
-  return(gene.data)
+  
+  # Filter out the data that causes errors and warnings to arise from the optimization
+  return(gene.data[apply(gene.data, 1, var) > 0, ])
 }

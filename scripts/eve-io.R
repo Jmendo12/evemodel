@@ -13,3 +13,8 @@ getExprData <- function(filename)
   # Filter out the data that causes errors and warnings to arise from the optimization
   return(gene.data[apply(gene.data, 1, var) > 0, ])
 }
+
+getSpeciesToShift <- function()
+{
+  shiftedSpecies <- readline(prompt = "Enter the species names to shift: ")
+}

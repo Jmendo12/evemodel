@@ -19,17 +19,19 @@ divergenceDiversityTest <- function()
   
   return(betaSharedTest(tree, gene.data))
   
-  ourIndivBetaResultMatrix <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$par} )
+  # Some old debugging code for comparing the results of the betaSharedTest with the dummy data
+  #ourIndivBetaResultMatrix <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$par} )
   
-  testResMatrix <- t(as.matrix(read.table("data/indivBetaMLParams_trialRun.res", col.names = names(indivBetaRes[[1]]$par))))
+  #testResMatrix <- t(as.matrix(read.table("data/indivBetaMLParams_trialRun.res", col.names = names(indivBetaRes[[1]]$par))))
   
-  ourIndivBetaResultMatrix / testResMatrix
+  #ourIndivBetaResultMatrix / testResMatrix
   
-  ourIndivBetaLLs <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$value})
+  #ourIndivBetaLLs <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$value})
   
-  testResLLs <- read.table("data/indivBetaMLs_trialRun.res")
-  testResLLsVec <- sapply(testResLLs, function(testResLLsRow) {testResLLsRow})
+  #testResLLs <- read.table("data/indivBetaMLs_trialRun.res")
+  #testResLLsVec <- sapply(testResLLs, function(testResLLsRow) {testResLLsRow})
   
-  ourIndivBetaLLs / abs(testResLLs * 1.001)
+  #ourIndivBetaLLs / abs(testResLLs * 1.001)
 }
+
 

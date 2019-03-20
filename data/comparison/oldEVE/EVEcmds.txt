@@ -1,4 +1,9 @@
+# beta shared test on simulated data
 ./EVEmodel -S -n 12 -t simData/examplePhylo.newick -i simData/exampleNindivs.nindiv -d simData/sampleExpr.dat -f _simData -v 10
+
+# two-theta test on simulated data
+./EVEmodel -O -o 3 -o 4 -n 12 -t simData/examplePhylo.newick -i simData/exampleNindivs.nindiv -d simData/sampleExpr.dat -f _simData -v 10
 
 
 ./EVEmodel -S -n 20 -t salmonData/salmon.newick -i salmonData/salmon.nindiv -d salmonData/salmon20.dat -f _salmon20 -v 10
+

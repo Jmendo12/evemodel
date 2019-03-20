@@ -145,3 +145,27 @@ logLikOU <- function(theta, sigma2, alpha, beta, tree, gene.data.row, index.expa
   ll <- dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
   return(ll)
 }
+
+# Likelihood of gene expression with given parameters
+# thetaShiftEdges logical vector specifying if the theta2 or theta1 shall be used
+logLikTwoTheta <- function(theta1, theta2, sigma2, alpha, beta, tree, thetaShiftEdges, gene.data.row, index.expand)
+{
+  # Define the expected species mean for the root and the evolutionary variance for the root
+  expected.species.mean.root <- theta1
+  evol.var.root <- sigma2 / (2 * alpha)
+  
+  
+  N <- Nedge(tree)
+  expression.var <- calcExpVarOU(tree, thetas = ifelse(thetaShiftNodes,theta2,theta1), 
+                                 alphas = rep(alpha,N), sigma2s = rep(sigma2,N),
+                                 rootVar = sigma2/(2*alpha), rootE = theta1)
+  
+  covar.matrix <- calcCovMatOU(tree, alphas = alpha, evol.variance = expression.var$evol.variance)
+  
+  expanded.matrix <- expandECovMatrix(expected.mean = expression.var$expected.mean,covar.matrix,
+                                      sigma2, alpha, beta, index.expand)
+  
+  # Get log likelihood from the multivariate normal distribution density
+  ll <- dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
+  return(ll)
+}

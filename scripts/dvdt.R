@@ -84,36 +84,40 @@ LLSharedBeta <- function(betaShared, ...)
   
   sumLL <- sum(sapply(resSharedBeta, function(res) res$value ))
   
+  nNotConverged <- sum(sapply(resSharedBeta, function(res) res$convergence )!=0)
+  
+  if( nNotConverged>0 ){
+    cat("  ",nNotConverged,"gene(s) did not converge!") 
+  }
+  
   cat("  LL =",sumLL,"\n") 
   
   # return sum of -LL for all genes
   return(sumLL)
 }
 
-# LLSharedBetaLog <- function(betaShared, ...){
-#   LLSharedBeta(exp(betaShared), ...)
-# }
 
 betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data)){
-  # fit with individual betas
+  cat("fit with individual betas...\n")
   indivBetaRes <- fitIndivBeta(tree,gene.data,colSpecies)
-  # estimate sharedBeta
+  
+  cat("Estimate shared beta...\n")
   sharedBetaFit <- optimize(f = LLSharedBeta,interval=c(0.0001,100),
                             tree=tree, gene.data=gene.data)
-  # fit using sharedBeta
   sharedBeta <- sharedBetaFit$minimum
+  
+  cat("fit with shared beta =",sharedBeta,"...\n")
   sharedBetaRes <- fitSharedBeta(sharedBeta, tree, gene.data)
   
-  # calculate Log likelihood ratio
-  LLRatios <- mapply(function(indivBetaRow, sharedBetaRow)
+  # calculate likelihood ratio test statistic
+  LRT <- mapply(function(indivBetaRow, sharedBetaRow)
     {
       (2 * -(indivBetaRow$value)) - (2 * -(sharedBetaRow$value))
     }, indivBetaRes, sharedBetaRes)
+
   
-  sumLLIndivBeta <- sum(sapply(indivBetaRes, function(row) {row$value} ))
-  
-  totalLLRatio <- (-2 * log(sumLLIndivBeta) - (-2 * log(sharedBetaFit$objective)))
-  
-  return( list(indivBetaRes = indivBetaRes, sharedBeta = sharedBeta, sharedBetaRes = sharedBetaRes, 
-               LLRatios = LLRatios, totalLLRatio = totalLLRatio) )
+  return( list(indivBetaRes = indivBetaRes, 
+               sharedBeta = sharedBeta, 
+               sharedBetaRes = sharedBetaRes, 
+               LRT = LRT) )
 }

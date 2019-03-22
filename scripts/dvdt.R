@@ -107,7 +107,7 @@ betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data)){
   sharedBeta <- sharedBetaFit$minimum
   
   cat("fit with shared beta =",sharedBeta,"...\n")
-  sharedBetaRes <- fitSharedBeta(sharedBeta, tree, gene.data)
+  sharedBetaRes <- fitSharedBeta(sharedBeta, tree, gene.data, colSpecies)
   
   # calculate likelihood ratio test statistic
   LRT <- mapply(function(indivBetaRow, sharedBetaRow)

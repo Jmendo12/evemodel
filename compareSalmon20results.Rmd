@@ -15,13 +15,11 @@ library(ape)
 
 source('./scripts/eve-io.R')
 source('./scripts/dvdt.R')
+source("scripts/twoThetaTest.R")
 
 library(tidyverse)
 ```
 
-## Beta shared test on first 20 genes of the salmonid expression data
-
-Compare beta-shared test results with the original EVE implementation using the first 20 genes of the salmonid expression data. 
 
 ```{r Load data}
 # simulated example data
@@ -36,7 +34,24 @@ sharedBetaMLparams <- read.table("data/comparison/oldEVE/results/sharedBetaMLpar
 betaTestLRTs <- scan("data/comparison/oldEVE/results/betaTestLRTs_salmon20.res")
 sharedBetaMLs <- scan("data/comparison/oldEVE/results/sharedBetaMLs_salmon20.res")
 indivBetaMLs <- scan("data/comparison/oldEVE/results/indivBetaMLs_salmon20.res")
+
+
+# original EVE two-theta test results
+oneThetaMLparams <- read.table("data/comparison/oldEVE/results/oneThetaMLparams_salmon20.res", 
+                                col.names = c("theta","sigma2","alpha","beta"))
+twoBSThetaMLparams <- 
+  read.table("data/comparison/oldEVE/results/twoBSThetaMLparams_salmon20.res",
+             col.names = c("theta","sigma2","alpha","beta")) %>% 
+  mutate(key=paste0("theta",rep(1:2,n()/2))) %>% 
+  spread(key = key,value = theta)
+BSThetaTestLRTs <- scan("data/comparison/oldEVE/results/BSThetaTestLRTs_salmon20.res")
+oneThetaMLs <- scan("data/comparison/oldEVE/results/oneThetaMLs_salmon20.res")
+twoBSThetaMLs <- scan("data/comparison/oldEVE/results/twoBSThetaMLs_salmon20.res")
+
+shiftSpecies <- c("Salp","Okis","Omyk","Ssal")
 ```
+
+## Beta shared test
 
 ```{r Run beta-shared test, cache=TRUE, include=F}
 BetaSharedRes <- betaSharedTest(tree, gene.data)
@@ -50,7 +65,6 @@ myCompareParamPlot <- function(df){
     ggplot( aes(x=Value,y=geneID, color=implementation, shape=implementation)) + 
     geom_point( size=3) + 
     scale_shape_manual(values = c(3,4)) +
-    scale_x_log10() +
     facet_grid(. ~ Parameter ,scales = "free") +
     theme(legend.position="bottom")
 }
@@ -63,15 +77,14 @@ myCompareParamPlot <- function(df){
 
 ### LRTs
 
-```{r plotLRT, fig.height=4, message=FALSE}
+```{r plotLRT, fig.height=4}
 bind_rows( .id="implementation",
   old=tibble( LRT=betaTestLRTs, geneID=rownames(gene.data)),
   new=tibble( LRT=BetaSharedRes$LRT, geneID=rownames(gene.data))) %>% 
   gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
   myCompareParamPlot() +
   geom_vline(data=tibble(x=qchisq(p=0.95,df=1),Parameter="LRT"),aes(xintercept=x),color="blue",linetype=3) +
-  geom_vline(data=tibble(x=qchisq(p=0.05,df=1),Parameter="LRT"),aes(xintercept=x),color="blue",linetype=3) +
-  scale_x_continuous()
+  geom_vline(data=tibble(x=qchisq(p=0.05,df=1),Parameter="LRT"),aes(xintercept=x),color="blue",linetype=3)
 ```
 
 Vertical lines are 0.05 and 0.95 of chi-squared distribution with 1 degree of freedom.
@@ -107,7 +120,9 @@ bind_rows(.id = "implementation",
   gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
   filter( Parameter != "theta") %>% 
   myCompareParamPlot() +
-  geom_vline(data=tibble(x=alphaMax,Parameter="alpha"),aes(xintercept=x),color="red",linetype=2)
+  geom_vline(data=tibble(x=alphaMax,Parameter="alpha"),aes(xintercept=x),color="red",linetype=2) + 
+  scale_x_log10()
+
 
 bind_rows(.id = "implementation",
           new=map_df(BetaSharedRes$indivBetaRes, ~ as_tibble(t(.x$par))) %>% 
@@ -116,13 +131,12 @@ bind_rows(.id = "implementation",
             mutate( geneID = rownames(gene.data))) %>% 
   gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
   filter( Parameter == "theta") %>% 
-  myCompareParamPlot() +
-  scale_x_continuous()
+  myCompareParamPlot()
 ```
 
 ### shared beta parameters
 
-```{r plotCompareSharedBetaParams, fig.height=4, message=FALSE}
+```{r plotCompareSharedBetaParams, fig.height=4}
 bind_rows(.id = "implementation",
           new=map_df(BetaSharedRes$sharedBetaRes, ~ as_tibble(t(.x$par))) %>% 
             mutate( geneID = rownames(gene.data)),
@@ -132,7 +146,9 @@ bind_rows(.id = "implementation",
   filter( Parameter != "beta") %>% 
   filter( Parameter != "theta") %>% 
   myCompareParamPlot() +
-  geom_vline(data=tibble(x=alphaMax,Parameter="alpha"),aes(xintercept=x),color="red",linetype=2)
+  geom_vline(data=tibble(x=alphaMax,Parameter="alpha"),aes(xintercept=x),color="red",linetype=2) +
+  scale_x_log10()
+
 
 bind_rows(.id = "implementation",
           new=map_df(BetaSharedRes$sharedBetaRes, ~ as_tibble(t(.x$par))) %>% 
@@ -141,8 +157,87 @@ bind_rows(.id = "implementation",
             mutate( geneID = rownames(gene.data))) %>% 
   gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
   filter( Parameter == "theta") %>% 
+  myCompareParamPlot()
+
+```
+
+## Two-theta test results
+
+```{r Run two-theta test, cache=TRUE, include=F}
+twoThetaRes <- twoThetaTest(tree, gene.data,shiftSpecies = shiftSpecies)
+```
+
+### LRTs
+
+```{r plotLRTtwoTheta, fig.height=3}
+bind_rows( .id="implementation",
+  old=tibble( LRT=BSThetaTestLRTs, geneID=rownames(gene.data)),
+  new=tibble( LRT=twoThetaRes$LRT, geneID=rownames(gene.data))) %>% 
+  gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
   myCompareParamPlot() +
-  scale_x_continuous()
+  geom_vline(data=tibble(x=qchisq(p=0.95,df=1),Parameter="LRT"),aes(xintercept=x),color="blue",linetype=3) +
+  geom_vline(data=tibble(x=qchisq(p=0.05,df=1),Parameter="LRT"),aes(xintercept=x),color="blue",linetype=3)
+```
+
+### MLs
+
+```{r plotMLstwoTheta, fig.height=3}
+bind_rows( .id="implementation",
+  old=tibble( oneThetaML=oneThetaMLs,twoThetaML=twoBSThetaMLs, geneID=rownames(gene.data)),
+  new=tibble( oneThetaML=-map_dbl(twoThetaRes$oneThetaRes,"value"),twoThetaML=-map_dbl(twoThetaRes$twoThetaRes,"value"), geneID=rownames(gene.data))) %>% 
+  gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
+  mutate( geneID = factor(geneID,levels=rev(unique(geneID)))) %>% 
+  ggplot( aes(x=Value,y=geneID, color=implementation, shape=implementation)) + 
+  geom_point( size=3) + 
+  scale_shape_manual(values = c(3,4)) +
+  facet_grid(. ~ Parameter ,scales = "free") +
+  theme(legend.position="bottom")
+```
+
+### two-theta parameters
+
+```{r plotCompareTwoThetaParams, fig.height=3}
+bind_rows(.id = "implementation",
+          new=map_df(twoThetaRes$twoThetaRes, ~ as_tibble(t(.x$par))) %>% 
+            mutate( geneID = rownames(gene.data)),
+          old=twoBSThetaMLparams %>% 
+            mutate( geneID = rownames(gene.data))) %>% 
+  gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
+  filter( !grepl("theta",Parameter)) %>% 
+  myCompareParamPlot() +
+  geom_vline(data=tibble(x=alphaMax,Parameter="alpha"),aes(xintercept=x),color="red",linetype=2) + 
+  scale_x_log10()
+
+
+bind_rows(.id = "implementation",
+          new=map_df(twoThetaRes$twoThetaRes, ~ as_tibble(t(.x$par))) %>% 
+            mutate( geneID = rownames(gene.data)),
+          old=twoBSThetaMLparams %>% 
+            mutate( geneID = rownames(gene.data))) %>% 
+  gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
+  filter( grepl("theta",Parameter)) %>% 
+  myCompareParamPlot()
+
+```
+
+### Convergence time
+
+```{r}
+bind_rows( .id = "model",
+  oneTheta = tibble(
+    iterations = sapply(twoThetaRes$oneThetaRes, function(x) x$counts[1]),
+    convergence = sapply(twoThetaRes$oneThetaRes, function(x) x$message ),
+    geneID = rownames(gene.data)),
+  twoTheta = tibble(
+    iterations = sapply(twoThetaRes$twoThetaRes, function(x) x$counts[1]),
+    convergence = sapply(twoThetaRes$twoThetaRes, function(x) x$message ),
+    geneID = rownames(gene.data))
+) %>% 
+  mutate( geneID=factor(geneID,levels=rev(rownames(gene.data)))) %>% 
+  ggplot() + 
+  geom_point( aes(x=iterations,y=geneID, color=convergence) ) + 
+  facet_wrap( ~model) + 
+  theme(legend.position="bottom",legend.direction = "vertical")
 
 ```
 

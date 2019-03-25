@@ -16,13 +16,10 @@ library(ape)
 
 source('./scripts/eve-io.R')
 source('./scripts/dvdt.R')
+source('./scripts/twoThetaTest.R')
 
 library(tidyverse)
 ```
-
-## Beta shared test on example data
-
-Compare beta-shared test results with the original EVE implementation using the example data. 
 
 ```{r Load data}
 # simulated example data
@@ -37,7 +34,21 @@ sharedBetaMLparams <- read.table("data/comparison/oldEVE/results/sharedBetaMLpar
 betaTestLRTs <- scan("data/comparison/oldEVE/results/betaTestLRTs_simData.res")
 sharedBetaMLs <- scan("data/comparison/oldEVE/results/sharedBetaMLs_simData.res")
 indivBetaMLs <- scan("data/comparison/oldEVE/results/indivBetaMLs_simData.res")
+
+# original EVE two-theta test results
+oneThetaMLparams <- read.table("data/comparison/oldEVE/results/oneThetaMLparams_simData.res", 
+                                col.names = c("theta","sigma2","alpha","beta"))
+twoBSThetaMLparams <- 
+  read.table("data/comparison/oldEVE/results/twoBSThetaMLparams_simData.res", 
+             col.names = c("theta","sigma2","alpha","beta")) %>% 
+  mutate(key=paste0("theta",rep(1:2,n()/2))) %>% 
+  spread(key = key,value = theta)
+BSThetaTestLRTs <- scan("data/comparison/oldEVE/results/BSThetaTestLRTs_simData.res")
+oneThetaMLs <- scan("data/comparison/oldEVE/results/oneThetaMLs_simData.res")
+twoBSThetaMLs <- scan("data/comparison/oldEVE/results/twoBSThetaMLs_simData.res")
 ```
+
+## Beta shared test
 
 ```{r Run beta-shared test, cache=TRUE, include=F}
 BetaSharedRes <- betaSharedTest(tree, gene.data)
@@ -161,6 +172,106 @@ bind_rows(.id = "implementation",
   filter( Parameter != "beta") %>% 
   myCompareParamPlot() +
   geom_vline(data=tibble(x=46.0517,Parameter="alpha"),aes(xintercept=x),color="red",linetype=2)
+
+```
+
+## Two-theta test results
+
+```{r Run two-theta test, cache=TRUE, include=F}
+twoThetaRes <- twoThetaTest(tree, gene.data,shiftSpecies = c("D","E"))
+```
+
+### LRTs
+
+```{r plotLRTtwoTheta, fig.height=3, message=FALSE}
+bind_rows( .id="implementation",
+  old=tibble( LRT=BSThetaTestLRTs, geneID=rownames(gene.data)),
+  new=tibble( LRT=twoThetaRes$LRT, geneID=rownames(gene.data))) %>% 
+  gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
+  myCompareParamPlot() +
+  geom_vline(data=tibble(x=qchisq(p=0.95,df=1),Parameter="LRT"),aes(xintercept=x),color="blue",linetype=3) +
+  geom_vline(data=tibble(x=qchisq(p=0.05,df=1),Parameter="LRT"),aes(xintercept=x),color="blue",linetype=3) +
+  scale_x_continuous()
+```
+
+### MLs
+
+```{r plotMLstwoTheta, fig.height=3}
+bind_rows( .id="implementation",
+  old=tibble( oneThetaML=oneThetaMLs,twoThetaML=twoBSThetaMLs, geneID=rownames(gene.data)),
+  new=tibble( oneThetaML=-map_dbl(twoThetaRes$oneThetaRes,"value"),twoThetaML=-map_dbl(twoThetaRes$twoThetaRes,"value"), geneID=rownames(gene.data))) %>% 
+  gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
+  mutate( geneID = factor(geneID,levels=rev(unique(geneID)))) %>% 
+  ggplot( aes(x=Value,y=geneID, color=implementation, shape=implementation)) + 
+  geom_point( size=3) + 
+  scale_shape_manual(values = c(3,4)) +
+  facet_grid(. ~ Parameter ,scales = "free") +
+  theme(legend.position="bottom")
+```
+
+### two-theta parameters
+
+```{r plotCompareTwoThetaParams, fig.height=3}
+bind_rows(.id = "implementation",
+          new=map_df(twoThetaRes$twoThetaRes, ~ as_tibble(t(.x$par))) %>% 
+            mutate( geneID = rownames(gene.data)),
+          old=twoBSThetaMLparams %>% 
+            mutate( geneID = rownames(gene.data))) %>% 
+  gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
+  myCompareParamPlot() +
+  geom_vline(data=tibble(x=46.0517,Parameter="alpha"),aes(xintercept=x),color="red",linetype=2)
+```
+
+These parameter estimates looks way off, which is strange given that the likelihoods were so similar. Try calculating new log likihoods using the "old" parameter estimates and compare with the original old log likelihoods:
+
+```{r plotCompareNewLLFromOldPar}
+
+isThetaShiftEdge <- 1:Nedge(tree) %in% getEdgesFromMRCA(tree, tips = c("D","E"))
+index.expand <- match(colnames(gene.data), tree$tip.label)
+
+newLLfromOldParams <-
+  twoBSThetaMLparams %>% 
+  mutate( geneID = rownames(gene.data)) %>% 
+  mutate( LL = pmap_dbl(.l = list(theta1=theta1,theta2=theta2,sigma2=sigma2,alpha=alpha,beta=beta,
+                                  gene.data.row = lapply(geneID, function(i) gene.data[i, ])),
+                        .f = logLikTwoTheta,
+                        tree = tree, 
+                        isThetaShiftEdge = isThetaShiftEdge,
+                        index.expand = index.expand))
+
+bind_rows( .id="implementation",
+  old=tibble( twoThetaML=twoBSThetaMLs, geneID=rownames(gene.data)),
+  reevaluated=tibble( twoThetaML=newLLfromOldParams$LL, geneID=newLLfromOldParams$geneID)) %>% 
+  gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
+  mutate( geneID = factor(geneID,levels=rev(unique(geneID)))) %>% 
+  ggplot( aes(x=Value,y=geneID, color=implementation, shape=implementation)) + 
+  geom_point( size=3) + 
+  scale_shape_manual(values = c(3,4)) +
+  facet_grid(. ~ Parameter ,scales = "free") +
+  theme(legend.position="bottom")
+
+```
+
+The likelihoods for some genes are also far off. Most likely the original implementation does not return the correct parameters.
+
+### Convergence time
+
+```{r}
+bind_rows( .id = "model",
+  oneTheta = tibble(
+    iterations = sapply(twoThetaRes$oneThetaRes, function(x) x$counts[1]),
+    convergence = sapply(twoThetaRes$oneThetaRes, function(x) x$message ),
+    geneID = rownames(gene.data)),
+  twoTheta = tibble(
+    iterations = sapply(twoThetaRes$twoThetaRes, function(x) x$counts[1]),
+    convergence = sapply(twoThetaRes$twoThetaRes, function(x) x$message ),
+    geneID = rownames(gene.data))
+) %>% 
+  mutate( geneID=factor(geneID,levels=rev(rownames(gene.data)))) %>% 
+  ggplot() + 
+  geom_point( aes(x=iterations,y=geneID, color=convergence) ) + 
+  facet_wrap( ~model) + 
+  theme(legend.position="bottom",legend.direction = "vertical")
 
 ```
 

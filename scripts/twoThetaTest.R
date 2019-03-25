@@ -74,10 +74,10 @@ fitTwoThetas <- function(tree, gene.data, shiftSpecies, colSpecies){
 # test for shift in theta at branch specified by the extant species "shiftSpecies"
 twoThetaTest <- function(tree, gene.data, shiftSpecies, colSpecies = colnames(gene.data)){
   
-  cat("fit with single theta...\n") # same as individual beta
+  cat("Fit with single theta...\n") # same as individual beta
   oneThetaRes <- fitIndivBeta(tree,gene.data,colSpecies)
   
-  cat("Fit with two thetas\n")
+  cat("Fit with two thetas...\n")
   twoThetaRes <- fitTwoThetas(tree, gene.data, shiftSpecies, colSpecies)
   
   # calculate likelihood ratio test statistic

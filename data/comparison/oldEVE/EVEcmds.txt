@@ -5,5 +5,11 @@
 ./EVEmodel -O -o 3 -o 4 -n 12 -t simData/examplePhylo.newick -i simData/exampleNindivs.nindiv -d simData/sampleExpr.dat -f _simData -v 10
 
 
+# beta shared test on salmonid data
 ./EVEmodel -S -n 20 -t salmonData/salmon.newick -i salmonData/salmon.nindiv -d salmonData/salmon20.dat -f _salmon20 -v 10
+
+# two-theta test on salmonid data
+./EVEmodel -O -o 3 -o 4 -o 5 -o 6 -n 20 -t salmonData/salmon.newick -i salmonData/salmon.nindiv -d salmonData/salmon20.dat -f _salmon20 -v 10
+# alternatively also specify the internal nodes 7 and 8 
+./EVEmodel -O -o 3 -o 4 -o 5 -o 6 -o 7 -o 8 -n 20 -t salmonData/salmon.newick -i salmonData/salmon.nindiv -d salmonData/salmon20.dat -f _salmon20 -v 10
 

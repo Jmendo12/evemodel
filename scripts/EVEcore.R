@@ -150,11 +150,6 @@ logLikOU <- function(theta, sigma2, alpha, beta, tree, gene.data.row, index.expa
 # isThetaShiftEdge logical vector specifying if the theta2 or theta1 shall be used
 logLikTwoTheta <- function(theta1, theta2, sigma2, alpha, beta, tree, isThetaShiftEdge, gene.data.row, index.expand)
 {
-  # Define the expected species mean for the root and the evolutionary variance for the root
-  expected.species.mean.root <- theta1
-  evol.var.root <- sigma2 / (2 * alpha)
-  
-  
   N <- Nedge(tree)
   expression.var <- calcExpVarOU(tree, thetas = ifelse(isThetaShiftEdge,theta2,theta1), 
                                  alphas = rep(alpha,N), sigma2s = rep(sigma2,N),

@@ -41,11 +41,13 @@ oneThetaMLparams <- read.table("data/comparison/oldEVE/results/oneThetaMLparams_
 twoBSThetaMLparams <- 
   read.table("data/comparison/oldEVE/results/twoBSThetaMLparams_simData.res", 
              col.names = c("theta","sigma2","alpha","beta")) %>% 
-  mutate(key=paste0("theta",rep(1:2,n()/2))) %>% 
-  spread(key = key,value = theta)
+  mutate(key=paste0("theta",rep(1:2,n()/2)), idx = rep(1:(n()/2),each=2)) %>% 
+  spread(key = key,value = theta) %>% 
+  arrange(idx) %>% select(-idx)
 BSThetaTestLRTs <- scan("data/comparison/oldEVE/results/BSThetaTestLRTs_simData.res")
 oneThetaMLs <- scan("data/comparison/oldEVE/results/oneThetaMLs_simData.res")
 twoBSThetaMLs <- scan("data/comparison/oldEVE/results/twoBSThetaMLs_simData.res")
+
 ```
 
 ## Beta shared test
@@ -222,7 +224,9 @@ bind_rows(.id = "implementation",
   geom_vline(data=tibble(x=46.0517,Parameter="alpha"),aes(xintercept=x),color="red",linetype=2)
 ```
 
-These parameter estimates looks way off, which is strange given that the likelihoods were so similar. Try calculating new log likihoods using the "old" parameter estimates and compare with the original old log likelihoods:
+The alpha parameter seems to be estimated higher than under the single theta model and hence more often bump against the alpha bound. The alpha from the old implementation is often (gene 1,2,5,9) higher by a factor of 10^5 which equals "paramfactor". 
+
+Try calculating new log likihoods using the "old" parameter estimates and compare with the original old log likelihoods:
 
 ```{r plotCompareNewLLFromOldPar}
 
@@ -252,7 +256,7 @@ bind_rows( .id="implementation",
 
 ```
 
-The likelihoods for some genes are also far off. Most likely the original implementation does not return the correct parameters.
+The likelihoods are almost identical despite the variation in the parameters, indicating instability in the parameters.
 
 ### Convergence time
 

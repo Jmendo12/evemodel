@@ -226,7 +226,7 @@ bind_rows(.id = "implementation",
 
 The alpha parameter seems to be estimated higher than under the single theta model and hence more often bump against the alpha bound. The alpha from the old implementation is often (gene 1,2,5,9) higher by a factor of 10^5 which equals "paramfactor". 
 
-Try calculating new log likihoods using the "old" parameter estimates and compare with the original old log likelihoods:
+To compares only the likelihood algorithm and not the optimization routine, calculate new log likihoods using the "old" parameter estimates and compare with the original old log likelihoods:
 
 ```{r plotCompareNewLLFromOldPar}
 
@@ -243,20 +243,16 @@ newLLfromOldParams <-
                         isThetaShiftEdge = isThetaShiftEdge,
                         index.expand = index.expand))
 
-bind_rows( .id="implementation",
-  old=tibble( twoThetaML=twoBSThetaMLs, geneID=rownames(gene.data)),
-  reevaluated=tibble( twoThetaML=newLLfromOldParams$LL, geneID=newLLfromOldParams$geneID)) %>% 
-  gather(key = "Parameter",value = "Value", -implementation, -geneID) %>%
+tibble( old=twoBSThetaMLs, geneID=rownames(gene.data)) %>% 
+  left_join(transmute(newLLfromOldParams, reevaluated=LL, geneID=geneID), by="geneID") %>% 
+  mutate( reevaluatedDiff = reevaluated-old) %>% 
   mutate( geneID = factor(geneID,levels=rev(unique(geneID)))) %>% 
-  ggplot( aes(x=Value,y=geneID, color=implementation, shape=implementation)) + 
+  ggplot( aes(x=reevaluatedDiff,y=geneID)) + 
   geom_point( size=3) + 
-  scale_shape_manual(values = c(3,4)) +
-  facet_grid(. ~ Parameter ,scales = "free") +
-  theme(legend.position="bottom")
-
+  xlab("log Likelihood using same parameters (new - old)") 
 ```
 
-The likelihoods are almost identical despite the variation in the parameters, indicating instability in the parameters.
+The likelihoods are as good as identical, indicating that the new and old log likelihood calculation implementations are the same.
 
 ### Convergence time
 

@@ -9,7 +9,7 @@
 ./EVEmodel -S -n 20 -t salmonData/salmon.newick -i salmonData/salmon.nindiv -d salmonData/salmon20.dat -f _salmon20 -v 10
 
 # two-theta test on salmonid data
-./EVEmodel -O -o 3 -o 4 -o 5 -o 6 -n 20 -t salmonData/salmon.newick -i salmonData/salmon.nindiv -d salmonData/salmon20.dat -f _salmon20 -v 10
-# alternatively also specify the internal nodes 7 and 8 
+# ./EVEmodel -O -o 3 -o 4 -o 5 -o 6 -n 20 -t salmonData/salmon.newick -i salmonData/salmon.nindiv -d salmonData/salmon20.dat -f _salmon20 -v 10
+# Apparently you also need to specify the internal nodes (7 and 8) to set the entire clade as theta-shift
 ./EVEmodel -O -o 3 -o 4 -o 5 -o 6 -o 7 -o 8 -n 20 -t salmonData/salmon.newick -i salmonData/salmon.nindiv -d salmonData/salmon20.dat -f _salmon20 -v 10
 

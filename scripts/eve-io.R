@@ -3,43 +3,18 @@
 # Author: Rori Rohlfs, Lars Gronvold, John Mendoza
 # Data 2/25/19
 
-#Include all our necessary libraries
-library(ape)
-
-## Phylogengy Implementation
-# Initiliaze the phylogeny data and plot the phylogeny
-initializePhylogeny <- function()
-{
-  # Read in the filename the phylogeny is stored in
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the phylogeny data is stored, and include the file extension: "))
-  # Create a tree from the file given by the user
-  tree <- read.tree(fileName)
-  # Reset the margins
-  par(mar = c(5, 4, 4, 2) + 0.1)
-  # Plot the tree so the edge, node numbers, and tip labels are shown
-  plot.phylo(tree, type = "p", show.tip.label = T, label.offset = .05, y.lim = c(.5, 5.5), no.margin = F)
-  nodelabels(text = 1 : (Ntip(tree) + Nnode(tree)), node = 1 : (Ntip(tree) + Nnode(tree)), frame = "circle")
-  edgelabels(frame = "none", col = "red", adj = c(.5, -.1))
-  axisPhylo(1)
-  
-  return(tree)
-}
-
-# Use this function to get the data on the number of samples per species
-getIndividuals <- function()
-{
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the number of samples per species data is stored, and include the file extension: "))
-  num.indivs <- scan(fileName, sep = " ")
-  return(num.indivs)
-}
 
 # Use this function to get the per gene expression data
-getExprData <- function(num.indivs)
+getExprData <- function(filename)
 {
-  fileName <- paste("./data/", sep = "", readline(prompt = "Enter the file in which the gene expression data is stored, and include the file extension: "))
-  gene.data <- as.matrix(read.table("data/sampleExpr.dat",skip = 1,header = F,row.names = 1))
+  gene.data <- as.matrix(read.table(filename,header = F,skip = 1,row.names = 1))
+  colnames(gene.data) <- scan(filename,nlines = 1,what = character())
   
-  colnames(gene.data) <- rep(LETTERS[1:5], num.indivs)
-  
-  return(gene.data)
+  # Filter out the data that causes errors and warnings to arise from the optimization
+  return(gene.data[apply(gene.data, 1, var) > 0, ])
+}
+
+getSpeciesToShift <- function()
+{
+  shiftedSpecies <- readline(prompt = "Enter the species names to shift: ")
 }

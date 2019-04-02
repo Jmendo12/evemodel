@@ -2,53 +2,36 @@
 # Author: Rori Rohlfs, Lars Gronvold, John Mendoza
 # Date: 3/2/2019
 
+library(ape)
+
 source('./scripts/eve-io.R')
 source('./scripts/dvdt.R')
-source('./scripts/dvdtsb.R')
 
 divergenceDiversityTest <- function()
 {
   # Initialize the tree
-  tree <- initializePhylogeny()
-  
-  # Initialize the number of samples per species
-  num.indivs <- getIndividuals()
+  #tree <- read.tree("data/salmonidsPhylo.newick")
+  tree <- read.tree("data/examplePhylo2.newick")
   
   # Initialize the gene data
-  gene.data <- getExprData(num.indivs)
+  #gene.data <- getExprData("data/salmonidsBSNsglDupA.tsv")
+  gene.data <- getExprData("data/sampleExpr2.dat")
   
-  # Calculate the total likelihoods for the null and alternative hypothesis
-  ll.IndivBeta <- calculateLLIndivBeta(tree, num.indivs, gene.data)
-  ll.SharedBeta <- calculateLLsharedBeta(tree, num.indivs, gene.data)
+  return(betaSharedTest(tree, gene.data))
   
-  # Calculate the likelihood ratios - the if statements are to prevent NaN values from being returned from the natural
-  # log calculations; these NaNs are returned if the argument passed in to log is negative
-  if( ll.IndivBeta < 0 )
-  {
-    lr <- -2 * log(-ll.IndivBeta) - (-2 * log(ll.SharedBeta))
-  }
-  else if(ll.SharedBeta < 0)
-  {
-    lr < - 2 * log(ll.IndivBeta) - (-2 * log(-ll.SharedBeta))
-  }
-  else
-  {
-    lr <- -2 * log(ll.IndivBeta) - (-2 * log(ll.SharedBeta))
-  }
+  # Some old debugging code for comparing the results of the betaSharedTest with the dummy data
+  #ourIndivBetaResultMatrix <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$par} )
   
-  # If the likelihood ratio is negative, make it positive so that caculating log(lr) does not return NaN
-  if(lr < 0)
-  {
-    lr <- -lr
-  }
+  #testResMatrix <- t(as.matrix(read.table("data/indivBetaMLParams_trialRun.res", col.names = names(indivBetaRes[[1]]$par))))
   
-  # Calculate chi sqaured with one degree of freedom
-  chi.squared <- 2 * log(lr)
+  #ourIndivBetaResultMatrix / testResMatrix
   
-  # Since R does not support returning multiple values from a function, save both the likelihood ration value and chi sqaured
-  # value to a results file. To view these results in your enviromnent call load("./results/dvdtresults.RData")
-  save(lr , chi.squared, file = "./results/dvdtresults.RData")
+  #ourIndivBetaLLs <- sapply(indivBetaRes, function(indivBetaResRow) {indivBetaResRow$value})
   
-  # Return the chi squared value
-  return(chi.squared)
+  #testResLLs <- read.table("data/indivBetaMLs_trialRun.res")
+  #testResLLsVec <- sapply(testResLLs, function(testResLLsRow) {testResLLsRow})
+  
+  #ourIndivBetaLLs / abs(testResLLs * 1.001)
 }
+
+

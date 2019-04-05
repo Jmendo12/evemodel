@@ -8,12 +8,23 @@
 #Include all our necessary libraries
 source('scripts/EVEcore.R')
 
+logTransform <- function(row)
+{
+  return(c(row[1], log(row[2]), log(row[3]), log(row[4])))
+}
+
+expTransform <- function(row)
+{
+  return(c(row[1], exp(row[2]), exp(row[3]), exp(row[4])))
+}
+
 LLPerGeneIndivBeta <- function(param.matrix.row, tree, gene.data.row, index.expand)
 {
-  ll <- -logLikOU( theta = param.matrix.row[1],
-                   sigma2 = param.matrix.row[2],
-                   alpha = param.matrix.row[3],
-                   beta = param.matrix.row[4],
+  transformedParams <- expTransform(param.matrix.row)
+  ll <- -logLikOU( theta = transformedParams[1],
+                   sigma2 = transformedParams[2],
+                   alpha = transformedParams[3],
+                   beta = transformedParams[4],
                    tree, gene.data.row, index.expand)
   return(ll)
 }
@@ -34,16 +45,20 @@ fitIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.data))
   lapply(1:nrow(gene.data), function(row){
     # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
     res <- tryCatch({
-      optim(initial.param.matrix[row, ], fn = LLPerGeneIndivBeta, gr = NULL, tree, gene.data[row, ], index.expand,
-            method = "L-BFGS-B", lower = c(-Inf, 1e-10, 1e-10, 1e-10), upper = c(Inf, Inf, alphaMax, Inf))
+      optim( logTransform(initial.param.matrix[row, ]), fn = LLPerGeneIndivBeta, gr = NULL, tree, gene.data[row, ], 
+            index.expand, method = "L-BFGS-B", upper = c(Inf, Inf, alphaMax, Inf))
+      #optim(initial.param.matrix[row, ], fn = LLPerGeneIndivBeta, gr = NULL, tree, gene.data[row, ], 
+       #     index.expand, method = "L-BFGS-B", lower = c(-Inf, 1e-10, 1e-10, 1e-10), 
+        #    upper = c(Inf, Inf, alphaMax, Inf))
     }, error = function(e) {
       warning(paste(e$message, "at gene.data row", row), immediate. = T)
     })
-  }) -> res
+  }) -> resPreTransform
   
-  return(res)
+  lapply(resPreTransform, function(res) { res$par <- expTransform(res$par) ; return(res)} ) -> resTransformed
+  return(resTransformed)
 }
-
+# TODO: In line with the below, transform this function into a for loop
 LLPerGeneSharedBeta <- function(param.matrix.row, betaShared, tree, gene.data.row, index.expand)
 {
   ll <- logLikOU( theta = param.matrix.row[1],
@@ -54,6 +69,8 @@ LLPerGeneSharedBeta <- function(param.matrix.row, betaShared, tree, gene.data.ro
   return(-ll)
 }
 
+# TODO: Try transformoring this optimize all parameters at once - the paramters shall be passed into the optimization
+# as a vector
 fitSharedBeta <- function(betaShared, tree, gene.data, colSpecies = colnames(gene.data))
 {
   #Calculate the per gene parameter matrix based on the gene data

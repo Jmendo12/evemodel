@@ -11,11 +11,11 @@ divergenceDiversityTest <- function()
 {
   # Initialize the tree
   #tree <- read.tree("data/salmonidsPhylo.newick")
-  tree <- read.tree("data/examplePhylo2.newick")
+  tree <- read.tree("data/comparison/newFormat/simData/examplePhyloNamed.newick")
   
   # Initialize the gene data
-  #gene.data <- getExprData("data/salmonidsBSNsglDupA.tsv")
-  gene.data <- getExprData("data/sampleExpr2.dat")
+  gene.data <- getExprData("data/comparison/newFormat/simData/sampleExpr.tsv")
+  #gene.data <- getExprData("data/sampleExpr2.dat")
   
   return(betaSharedTest(tree, gene.data))
   

@@ -8,19 +8,29 @@
 #Include all our necessary libraries
 source('scripts/EVEcore.R')
 
-logTransform <- function(row)
+logTransformIndivBeta <- function(row)
 {
   return(c(row[1], log(row[2]), log(row[3]), log(row[4])))
 }
 
-expTransform <- function(row)
+logTransformSharedBeta <- function(row)
+{
+  return (c(row[1], log(row[2]), log(row[3])))
+}
+
+expTransformIndivBeta <- function(row)
 {
   return(c(row[1], exp(row[2]), exp(row[3]), exp(row[4])))
 }
 
+expTransformSharedBeta <- function(row)
+{
+  return (c(row[1], exp(row[2]), exp(row[3])))
+}
+
 LLPerGeneIndivBeta <- function(param.matrix.row, tree, gene.data.row, index.expand)
 {
-  transformedParams <- expTransform(param.matrix.row)
+  transformedParams <- expTransformIndivBeta(param.matrix.row)
   ll <- -logLikOU( theta = transformedParams[1],
                    sigma2 = transformedParams[2],
                    alpha = transformedParams[3],
@@ -45,8 +55,8 @@ fitIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.data))
   lapply(1:nrow(gene.data), function(row){
     # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
     res <- tryCatch({
-      optim( logTransform(initial.param.matrix[row, ]), fn = LLPerGeneIndivBeta, gr = NULL, tree, gene.data[row, ], 
-            index.expand, method = "L-BFGS-B", upper = c(Inf, Inf, alphaMax, Inf))
+      optim( logTransformIndivBeta(initial.param.matrix[row, ]), fn = LLPerGeneIndivBeta, gr = NULL, 
+             tree, gene.data[row, ], index.expand, method = "L-BFGS-B", upper = c(Inf, Inf, alphaMax, Inf))
       #optim(initial.param.matrix[row, ], fn = LLPerGeneIndivBeta, gr = NULL, tree, gene.data[row, ], 
        #     index.expand, method = "L-BFGS-B", lower = c(-Inf, 1e-10, 1e-10, 1e-10), 
         #    upper = c(Inf, Inf, alphaMax, Inf))
@@ -55,15 +65,16 @@ fitIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.data))
     })
   }) -> resPreTransform
   
-  lapply(resPreTransform, function(res) { res$par <- expTransform(res$par) ; return(res)} ) -> resTransformed
+  lapply(resPreTransform, function(res) { res$par <- expTransformIndivBeta(res$par) ; return(res)} ) -> resTransformed
   return(resTransformed)
 }
 # TODO: In line with the below, transform this function into a for loop
 LLPerGeneSharedBeta <- function(param.matrix.row, betaShared, tree, gene.data.row, index.expand)
 {
-  ll <- logLikOU( theta = param.matrix.row[1],
-                  sigma2 = param.matrix.row[2],
-                  alpha = param.matrix.row[3],
+  transformedParams <- expTransformSharedBeta(param.matrix.row)
+  ll <- logLikOU( theta = transformedParams[1],
+                  sigma2 = transformedParams[2],
+                  alpha = transformedParams[3],
                   beta = betaShared,
                   tree, gene.data.row, index.expand)
   return(-ll)
@@ -84,13 +95,17 @@ fitSharedBeta <- function(betaShared, tree, gene.data, colSpecies = colnames(gen
   
   # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
   lapply(1:nrow(gene.data), function(row){
-    optim( initial.param.matrix[row, 1:3], fn = LLPerGeneSharedBeta, method = "L-BFGS-B",
-           lower = c(-Inf, 1e-10, 1e-10, 1e-10), upper = c(Inf, Inf, alphaMax, Inf),
-           betaShared= betaShared,
-           tree = tree, gene.data.row = gene.data[row, ], index.expand=index.expand)
-  }) -> res
+    optim(logTransformSharedBeta(initial.param.matrix[row, 1:3]), fn = LLPerGeneSharedBeta, method = "L-BFGS-B", upper = c(Inf, Inf, alphaMax), 
+          betaShared = betaShared, tree = tree, gene.data.row = gene.data[row, ], index.expand = index.expand)
+    #optim( initial.param.matrix[row, 1:3], fn = LLPerGeneSharedBeta, method = "L-BFGS-B",
+     #      lower = c(-Inf, 1e-10, 1e-10, 1e-10), upper = c(Inf, Inf, alphaMax, Inf),
+      #     betaShared= betaShared,
+       #    tree = tree, gene.data.row = gene.data[row, ], index.expand=index.expand)
+  }) -> resPreTransform
   
-  return(res)
+  lapply(resPreTransform, function(res) { res$par <- expTransformSharedBeta(res$par) ; return(res)} ) -> resTransformed
+  
+  return(resTransformed)
 }
 
 LLSharedBeta <- function(betaShared, ...)

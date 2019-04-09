@@ -7,6 +7,8 @@ library(rbokeh)
 source("../scripts/EVEcore.R")
 source("../scripts/twoThetaTest.R")
 
+source("dyOptIterPlot.R")
+
 # load "dataSets"
 load("data.RData")
 
@@ -21,6 +23,8 @@ lapply(dataSets, function(dataSet){
   return(dataSet)
 }) -> dataSets
 
+# define the names of the parameters here
+paramNames = c("theta1", "theta2", "sigma2", "alpha", "beta")
 
 getMeanSigmaTwoTheta <- function(theta1, theta2, sigma2, alpha, beta, tree, shiftSpecies, colSpecies)
 {
@@ -116,7 +120,8 @@ ui <- fixedPage(
           )
         )
       ),
-      rbokehOutput("optimPlot")
+      # rbokehOutput("optimPlot")
+      dyOptIterPlotUI(id = "optimPlot",paramNames = c(paramNames,"ll"))
       
     )
   )
@@ -271,22 +276,33 @@ server <- function(input, output, session) {
   #     ggplot( aes(x=iteration,y=value)) + geom_point() + geom_line() + facet_grid( param ~ .,scales = "free_y")
   # })
   
-  output$optimPlot <- renderRbokeh({
-    x <- optimReact()
-    myData <- as.tibble(x$paramIterations) %>% mutate(iteration=1:n())
-    
-    tools <- c("pan", "wheel_zoom", "box_zoom", "box_select", "reset")
-    
-    lapply(colnames(x$paramIterations), function(par){
-      figure(width = 800, height = 100, tools = tools,
-             xlab = "iteration", ylab = par) %>%
-        ly_points("iteration", par, data = myData,
-                  color = par, size = 5, legend = FALSE)
-      
-    }) -> splom_list
-    
-    grid_plot(splom_list, ncol = 1, same_axes = c(TRUE,FALSE))
-  })
+  # output$optimPlot <- renderRbokeh({
+  #   x <- optimReact()
+  #   myData <- as.tibble(x$paramIterations) %>% mutate(iteration=1:n())
+  #   
+  #   tools <- c("pan", "wheel_zoom", "box_zoom", "box_select", "reset")
+  #   
+  #   lapply(colnames(x$paramIterations), function(par){
+  #     figure(width = 800, height = 100, tools = tools,
+  #            xlab = "iteration", ylab = par) %>%
+  #       ly_points("iteration", par, data = myData,
+  #                 color = par, size = 5, legend = FALSE)
+  #     
+  #   }) -> splom_list
+  #   
+  #   grid_plot(splom_list, ncol = 1, same_axes = c(TRUE,FALSE))
+  # })
+  
+  callModule(module = dyOptIterPlot, id= "optimPlot", 
+             paramNames = c(paramNames,"ll"),
+             paramListReact = reactive({
+               x <- optimReact()
+               if(is.null(x))
+                 return(NULL)
+               else
+                 apply(x$paramIterations,2,function(col){data.frame(idx=seq_along(col),val=col)})
+              }),
+             group = "ho")
   
 }
 

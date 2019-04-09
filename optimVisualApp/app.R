@@ -1,8 +1,8 @@
 library(shiny)
 library(tidyverse)
-library(ggplot2)
 library(ape)
 library(ggtree)
+library(rbokeh)
 
 source("../scripts/EVEcore.R")
 source("../scripts/twoThetaTest.R")
@@ -67,7 +67,7 @@ fitTwoThetasVarFix <- function(tree, gene.data.row, initParams, shiftSpecies, co
   }
   
   res <- optim( par = initParams[!isParamFixed], fn = LLPerGeneTwoTheta, method = "L-BFGS-B",
-           lower = c(-Inf, -Inf, 1e-10, 1e-10, 1e-10)[!isParamFixed], 
+           lower = c(-Inf, -Inf, 1e-10, 1e-10, 1e-2)[!isParamFixed], 
            upper = c(Inf, Inf, Inf, alphaMax, Inf)[!isParamFixed])
   
   return(list(optimRes = res, paramIterations=paramIterations))
@@ -126,33 +126,40 @@ ui <- fixedPage(
 server <- function(input, output, session) {
   
   optimReact <- eventReactive(input$runOptim, {
-    dataSet <-  reactDataset()
-    gene.data.row <- reactDataRow()
+    dataSet <-  reactDataSelect()
+    gene.data.row <- dataSet$gene.data[dataSet$geneID, ]
     initParams <- unlist(reactParams())
+    isParamFixed <- reactParamFix()
     
-    fitTwoThetasVarFix(tree = dataSet$tree,
+    res <- fitTwoThetasVarFix(tree = dataSet$tree,
                        gene.data.row = gene.data.row,
                        initParams = initParams,
                        shiftSpecies = dataSet$shiftSpecies,
                        colSpecies = colnames(dataSet$gene.data),
-                       isParamFixed = reactParamFix())
+                       isParamFixed = isParamFixed)
+    
+    # add result to list
+    # optimResult <- initParams
+    # optimResult[!isParamFixed] <- res$optimRes$par
+    # optimResult <- c(geneID=dataSet$geneID,optimResult, ll= -res$optimRes$value)
+    # resTbl <- tibble(geneID=character(),theta1=numeric(),theta2=numeric(),sigma2=numeric(),alpha=numeric(),
+    #                  beta=numeric(),ll=numeric())
+    # bind_rows(resTbl,optimResult)
+    
+    return( res )
   })
   
   # update gene selection when changing dataset
   observe({
-    dataSet = reactDataset()
+    dataSet <- dataSets[[input$selData]]
     geneIDs <- rownames(dataSet$gene.data)
     updateSelectInput(session, "selGene", choices = geneIDs, selected = geneIDs[1])
   })
   
   # update initial params when changing gene
   observe({
-    dataSet <- reactDataset()
-    geneID <- input$selGene
-
-    # TODO: fix so that this never happens:
-    if(!(geneID %in% rownames(dataSet$gene.data)))
-      geneID <- rownames(dataSet$gene.data)[1]
+    dataSet <- reactDataSelect()
+    geneID <- dataSet$geneID
 
     for( param in c("theta1","theta2","alpha","sigma2","beta")){
       updateNumericInput(session, param, value = dataSet$initParams[geneID,param])
@@ -197,20 +204,28 @@ server <- function(input, output, session) {
     return(dataSet)
   })
   
-  reactDataRow <- reactive({
-    dataSet <- reactDataset()
+  # react to changes in either selData or selGene
+  reactDataSelect <- reactive({
+    dataSet <- dataSets[[input$selData]]
     geneID <- input$selGene
     
     # TODO: fix so that this never happens:
     if(!(geneID %in% rownames(dataSet$gene.data))) 
       geneID <- rownames(dataSet$gene.data)[1]
     
-    gene.data.row <- dataSet$gene.data[geneID, ]
+    dataSet$geneID <- geneID
+    return(dataSet)
+  })
+  
+  reactDataRow <- reactive({
+    dataSet <- reactDataSelect()
+
+    gene.data.row <- dataSet$gene.data[dataSet$geneID, ]
     return(gene.data.row)
   })
   
   output$treePlot <- renderPlot({
-    dataSet <- reactDataset()
+    dataSet <- reactDataSelect()
     dataSet$g_phylo + 
       geom_tiplab(align = T) +
       scale_y_continuous(limits = c(1,Ntip(dataSet$tree)),expand=expand_scale(add=1)) +
@@ -221,7 +236,7 @@ server <- function(input, output, session) {
   })
   
   output$exprPlot <- renderPlot({
-    dataSet <- reactDataset()
+    dataSet <- reactDataSelect()
     gene.data.row <- reactDataRow()
     tibble( x=gene.data.row, spc=names(gene.data.row) ) %>% 
       left_join( select(dataSet$g_phylo$data,label,y), by=c("spc"="label")) %>% 

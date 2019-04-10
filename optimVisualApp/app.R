@@ -12,19 +12,17 @@ source("dyOptIterPlot.R")
 # load "dataSets"
 load("data.RData")
 
-dataSets$salmon20$shiftSpecies <- c("Salp","Okis","Omyk","Ssal")
-dataSets$sim$shiftSpecies <- c("D","E")
 
-lapply(dataSets, function(dataSet){
-  dataSet$g_phylo <- ggtree(dataSet$tree)
-  dataSet$orderedSpcs <- 
-    dataSet$g_phylo$data %>% filter(isTip) %>% arrange(y) %>% with(label)
-  dataSet$initParams <- initialParamsTwoTheta(dataSet$gene.data,colSpecies = colnames(dataSet$gene.data),shiftSpecies = dataSet$shiftSpecies)
-  return(dataSet)
-}) -> dataSets
 
 # define the names of the parameters here
 paramNames = c("theta1", "theta2", "sigma2", "alpha", "beta")
+
+
+# params <- as.list(dataSet$initParams[2,])
+# mapply(assign, x=names(params),value=params, MoreArgs = list( envir= .GlobalEnv))
+# tree = dataSet$tree
+# shiftSpecies = dataSet$shiftSpecies
+# colSpecies = colnames(dataSet$gene.data)
 
 getMeanSigmaTwoTheta <- function(theta1, theta2, sigma2, alpha, beta, tree, shiftSpecies, colSpecies)
 {
@@ -43,7 +41,9 @@ getMeanSigmaTwoTheta <- function(theta1, theta2, sigma2, alpha, beta, tree, shif
   expanded.matrix <- expandECovMatrix(expected.mean = expression.var$expected.mean,covar.matrix,
                                       sigma2, alpha, beta, index.expand)
   
-  return(list(mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr))
+  return(list(nodeMean = expression.var$expected.mean,
+              nodeVar = expression.var$evol.variance,
+              sigma = expanded.matrix$cov.matr))
 }
 
 fitTwoThetasVarFix <- function(tree, gene.data.row, initParams, shiftSpecies, colSpecies, isParamFixed){
@@ -198,9 +198,10 @@ server <- function(input, output, session) {
                          args = c(params, list( tree = dataSet$tree, shiftSpecies = dataSet$shiftSpecies, 
                                                 colSpecies = colnames(dataSet$gene.data)) ) )
     
+    # rearrange covariance matrix to match the species order in the tree
     idx <- order(match(colnames(dataSet$gene.data),dataSet$orderedSpcs))
-    meanSigma$mean <- meanSigma$mean[idx]
     meanSigma$sigma <- meanSigma$sigma[idx,idx]
+    
     return(meanSigma)
   })
   
@@ -243,10 +244,33 @@ server <- function(input, output, session) {
   output$exprPlot <- renderPlot({
     dataSet <- reactDataSelect()
     gene.data.row <- reactDataRow()
+    meanSigma <- reactMeanSigma()
+    params <- reactParams()
+    
+    # calculate measured species means
+    spcMean <- 
+      tibble( x=gene.data.row, spc=names(gene.data.row) ) %>% 
+        group_by(spc) %>% summarise(spcMean = mean(x))
+    
+    spcMeanVar <-
+      tibble( spc = dataSet$tree$tip.label,
+            spcExpMean=meanSigma$nodeMean[1:Ntip(dataSet$tree)],
+            spcExpVar=meanSigma$nodeVar[1:Ntip(dataSet$tree)]) %>%
+      left_join( select(dataSet$g_phylo$data,label,y), by=c("spc"="label")) %>%
+      left_join( spcMean, by="spc" ) %>% 
+      mutate( x1 = spcExpMean - 2*sqrt(spcExpVar), x2 = spcExpMean + 2*sqrt(spcExpVar)) %>% 
+      mutate( tau = spcExpVar*params$beta ) %>% 
+      mutate( tau_x1 = spcMean - 2*sqrt(tau), tau_x2 = spcMean + 2*sqrt(tau))
+
+    
     tibble( x=gene.data.row, spc=names(gene.data.row) ) %>% 
       left_join( select(dataSet$g_phylo$data,label,y), by=c("spc"="label")) %>% 
-      ggplot( aes(x=x,y=y) ) +
-      geom_point() +
+      ggplot() +
+      geom_segment( data=spcMeanVar, aes( y=y,yend=y,x=x1,xend=x2), size=3, color="red", alpha=0.5) +
+      geom_point( data=spcMeanVar, aes(x=spcExpMean,y=y), color="red", size=4,alpha=0.5) +
+      geom_segment( data=spcMeanVar, aes( y=y,yend=y,x=tau_x1,xend=tau_x2), size=1, color="blue", alpha=0.5) +
+      geom_point( data=spcMeanVar, aes(x=spcMean,y=y), color="blue", size=4,shape=18, alpha=0.5) +
+      geom_point( aes(x=x,y=y) ) +
       scale_y_continuous(limits = c(1,Ntip(dataSet$tree)),expand=expand_scale(add=1)) +
       xlab("expression level") +
       theme_bw()+

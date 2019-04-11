@@ -24,7 +24,8 @@ dyOptIterPlot <- function(input, output, session, paramNames, paramListReact, gr
         }
         cat("renderDygraph",parName,"\n")
         dygraph(paramList[[parName]],ylab = parName, group = group) %>% 
-          dyOptions(drawPoints = TRUE, pointSize = 2, stepPlot = TRUE) %>% 
+          dyOptions(drawPoints = TRUE, pointSize = 2, stepPlot = TRUE,digitsAfterDecimal=6) %>% 
+          dyLegend(show="follow") %>% 
           { if( parName == tail(paramNames,1) )
               dyRangeSelector(., height = 10)
             else

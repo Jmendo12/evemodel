@@ -12,41 +12,53 @@ source("dyOptIterPlot.R")
 # load "dataSets"
 load("data.RData")
 
-
+# initialize a table to store optimization results
+resTblInit <- bind_rows(
+  tibble(geneID=character(),theta1=numeric(),theta2=numeric(),sigma2=numeric(),alpha=numeric(),
+         beta=numeric(),ll=numeric()),
+  rownames_to_column(as.data.frame(dataSets$salmon20$initParams),var = "geneID"),
+  rownames_to_column(as.data.frame(dataSets$sim$initParams),var = "geneID"))
 
 # define the names of the parameters here
 paramNames = c("theta1", "theta2", "sigma2", "alpha", "beta")
 
-
-# params <- as.list(dataSet$initParams[2,])
-# mapply(assign, x=names(params),value=params, MoreArgs = list( envir= .GlobalEnv))
-# tree = dataSet$tree
-# shiftSpecies = dataSet$shiftSpecies
-# colSpecies = colnames(dataSet$gene.data)
-
-getMeanSigmaTwoTheta <- function(theta1, theta2, sigma2, alpha, beta, tree, shiftSpecies, colSpecies)
+# dataSetID <- "salmon20"
+# dataSet$geneID <- "OG0000053_2"
+# params <- as.list(dataSet$initParams[dataSet$geneID,])
+getMeanSigmaTwoTheta <- function(params, dataSetID)
 {
+  tree <- dataSets[[dataSetID]]$tree
+  shiftSpecies <- dataSets[[dataSetID]]$shiftSpeciestree
+  colSpecies <- colnames(dataSets[[dataSetID]]$gene.data)
+  
   isThetaShiftEdge <- 1:Nedge(tree) %in% getEdgesFromMRCA(tree, tips = shiftSpecies)
   
   # match the column species with the phylogeny tip labels
   index.expand <- match(colSpecies, tree$tip.label)
   
   N <- Nedge(tree)
-  expression.var <- calcExpVarOU(tree, thetas = ifelse(isThetaShiftEdge,theta2,theta1), 
-                                 alphas = rep(alpha,N), sigma2s = rep(sigma2,N),
-                                 rootVar = sigma2/(2*alpha), rootE = theta1)
+  expression.var <- calcExpVarOU(tree, thetas = ifelse(isThetaShiftEdge,params$theta2,params$theta1), 
+                                 alphas = rep(params$alpha,N), sigma2s = rep(params$sigma2,N),
+                                 rootVar = params$sigma2/(2*params$alpha), rootE = params$theta1)
   
-  covar.matrix <- calcCovMatOU(tree, alphas = alpha, evol.variance = expression.var$evol.variance)
+  covar.matrix <- calcCovMatOU(tree, alphas = params$alpha, evol.variance = expression.var$evol.variance)
   
   expanded.matrix <- expandECovMatrix(expected.mean = expression.var$expected.mean,covar.matrix,
-                                      sigma2, alpha, beta, index.expand)
+                                      params$sigma2, params$alpha, params$beta, index.expand)
   
   return(list(nodeMean = expression.var$expected.mean,
               nodeVar = expression.var$evol.variance,
+              expandedMean = expanded.matrix$expected.mean,
               sigma = expanded.matrix$cov.matr))
 }
 
-fitTwoThetasVarFix <- function(tree, gene.data.row, initParams, shiftSpecies, colSpecies, isParamFixed){
+# initParams=dataSet$initParams[dataSet$geneID, ]
+# isParamFixed = c(F,F,F,F,F)
+fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixed){
+  tree <- dataSets[[dataSetID]]$tree
+  shiftSpecies <- dataSets[[dataSetID]]$shiftSpeciestree
+  colSpecies <- colnames(dataSets[[dataSetID]]$gene.data)
+  
   isThetaShiftEdge <- 1:Nedge(tree) %in% getEdgesFromMRCA(tree, tips = shiftSpecies)
   
   # match the column species with the phylogeny tip labels
@@ -71,10 +83,15 @@ fitTwoThetasVarFix <- function(tree, gene.data.row, initParams, shiftSpecies, co
   }
   
   res <- optim( par = initParams[!isParamFixed], fn = LLPerGeneTwoTheta, method = "L-BFGS-B",
-           lower = c(-Inf, -Inf, 1e-10, 1e-10, 1e-2)[!isParamFixed], 
+           lower = c(-Inf, -Inf, 1e-10, 1e-10, 1e-3)[!isParamFixed], 
            upper = c(Inf, Inf, Inf, alphaMax, Inf)[!isParamFixed])
   
   return(list(optimRes = res, paramIterations=paramIterations))
+}
+
+doSimulate <- function(params, dataSetID){
+  meanSigma <- getMeanSigmaTwoTheta(params, dataSetID)
+  rmvnorm(n=1, mean=meanSigma$expandedMean, sigma = meanSigma$sigma)
 }
 
 
@@ -103,7 +120,9 @@ ui <- fixedPage(
           )
         )
       ),
-      actionButton("runOptim", "Optimize!")
+      actionButton("runOptim", "Optimize!"),
+      actionButton("updateParams", "Update params"),
+      actionButton("simulate", "Simulate")
     ),
     
     column(9,
@@ -120,9 +139,8 @@ ui <- fixedPage(
           )
         )
       ),
-      # rbokehOutput("optimPlot")
-      dyOptIterPlotUI(id = "optimPlot",paramNames = c(paramNames,"ll"))
-      
+      dyOptIterPlotUI(id = "optimPlot",paramNames = c(paramNames,"ll")),
+      dataTableOutput('restable')
     )
   )
 )
@@ -130,28 +148,75 @@ ui <- fixedPage(
 # Define server logic required to draw a histogram
 server <- function(input, output, session) {
   
-  optimReact <- eventReactive(input$runOptim, {
-    dataSet <-  reactDataSelect()
-    gene.data.row <- dataSet$gene.data[dataSet$geneID, ]
-    initParams <- unlist(reactParams())
+  curData <- reactiveValues( # define reactive values and set defaults
+    dataSetID = names(dataSets)[1],
+    geneID = rownames(dataSets[[1]]$gene.data)[1],
+    gene.data.row = dataSets[[1]]$gene.data[1,],
+    params = as.list(dataSets[[1]]$initParams[1,])
+  )
+  
+  optRes <- reactiveValues(
+    all = resTblInit # currentOpt
+  )
+  
+  observeEvent( input$updateParams, {
+    res <- optRes$currentOpt
+    if( is.null(res) ) return()
+    # update param Inputs
+    for( param in names(res$optimRes$par)){
+      cat('updateNumericInput(session, inputID="',param,'", value = ',res$optimRes$par[param],'\n',sep = "")
+      updateNumericInput(session, param, value = as.vector(res$optimRes$par[param]))
+    }  
+  })
+  
+  observeEvent( input$simulate, {
+    dataSet <- dataSets[[curData$dataSetID]] # dataSet = dataSets$salmon20
+    params <- curData$params # params = as.list(dataSet$initParams[1,])
+    
+    simData <- doSimulate(params, curData$dataSetID)
+
+    # add simdata to current dataSet
+    
+    # add empty row if simulated data not already exists
+    if(!("simulated" %in% rownames(dataSet$gene.data))){
+      dataSet$gene.data <- rbind(dataSet$gene.data, simulated=0)
+      dataSet$initParams <- rbind(dataSet$initParams, simulated=0)
+    }
+    # set the data
+    dataSet$gene.data["simulated",] <- simData
+    dataSet$initParams["simulated",] <- unlist(params)[colnames(dataSet$initParams)]
+    
+    # save it to the global dataset
+    dataSets[[input$selData]] <<- dataSet
+    
+    # update curData
+    curData$geneID <- "simulated"
+    curData$gene.data.row <- dataSet$gene.data["simulated",]
+    
+    # update selGene
+    geneIDs <- rownames(dataSet$gene.data)
+    updateSelectInput(session, "selGene", choices = geneIDs, selected = "simulated")
+  })
+  
+  observeEvent( input$runOptim, {
+    initParams <- unlist(curData$params)
     isParamFixed <- reactParamFix()
     
-    res <- fitTwoThetasVarFix(tree = dataSet$tree,
-                       gene.data.row = gene.data.row,
-                       initParams = initParams,
-                       shiftSpecies = dataSet$shiftSpecies,
-                       colSpecies = colnames(dataSet$gene.data),
-                       isParamFixed = isParamFixed)
+    res <- fitTwoThetasVarFix(
+      dataSetID = curData$dataSetID,
+      gene.data.row = curData$gene.data.row,
+      initParams = initParams,
+      isParamFixed = isParamFixed)
     
     # add result to list
-    # optimResult <- initParams
-    # optimResult[!isParamFixed] <- res$optimRes$par
-    # optimResult <- c(geneID=dataSet$geneID,optimResult, ll= -res$optimRes$value)
-    # resTbl <- tibble(geneID=character(),theta1=numeric(),theta2=numeric(),sigma2=numeric(),alpha=numeric(),
-    #                  beta=numeric(),ll=numeric())
-    # bind_rows(resTbl,optimResult)
-    
-    return( res )
+    optimResult <- initParams
+    optimResult[!isParamFixed] <- res$optimRes$par
+    optimResult <- bind_cols(as.data.frame(t(optimResult)),
+                             geneID=dataSet$geneID, ll= -res$optimRes$value)
+
+    # update reactive values
+    optRes$all <- bind_rows(optRes$all,optimResult) %>% distinct()
+    optRes$currentOpt <- res
   })
   
   # update gene selection when changing dataset
@@ -161,14 +226,28 @@ server <- function(input, output, session) {
     updateSelectInput(session, "selGene", choices = geneIDs, selected = geneIDs[1])
   })
   
-  # update initial params when changing gene
+  # update initial params and curData when changing gene
   observe({
-    dataSet <- reactDataSelect()
-    geneID <- dataSet$geneID
-
-    for( param in c("theta1","theta2","alpha","sigma2","beta")){
-      updateNumericInput(session, param, value = dataSet$initParams[geneID,param])
+    dataSetID <- isolate(input$selData)
+    dataSet <- dataSets[[dataSetID]]
+    geneID <- input$selGene
+    
+    if(!(geneID %in% rownames(dataSet$gene.data))){
+      cat("!!! selGene and selData not synced !!!\n")
+      geneID <- rownames(dataSet$gene.data)[1]
     }
+
+    params <- dataSet$initParams[geneID, ]
+    
+    for( param in paramNames){
+      # NOTE: for some reason the value cannot be named!
+      updateNumericInput(session, param, value = as.vector(params[param]))
+    }
+    
+    curData$dataSetID = dataSetID
+    curData$geneID = geneID
+    curData$gene.data.row = dataSet$gene.data[geneID,]
+    curData$params = as.list(params)
   })
   
   reactParams <- reactive({
@@ -179,6 +258,11 @@ server <- function(input, output, session) {
       sigma2 = input$sigma2,
       beta = input$beta
     )
+  })
+  throttledParams <- reactParams %>% throttle(500)
+  # update curData$params with throttled params
+  observe({
+    curData$params <- reactParams()
   })
   
   reactParamFix <- reactive({
@@ -192,46 +276,22 @@ server <- function(input, output, session) {
   })
   
   reactMeanSigma <- reactive({
-    params <- reactParams() # params = as.list(dataSet$initParams[1,])
-    dataSet <- reactDataset()
-    meanSigma <- do.call(getMeanSigmaTwoTheta, 
-                         args = c(params, list( tree = dataSet$tree, shiftSpecies = dataSet$shiftSpecies, 
-                                                colSpecies = colnames(dataSet$gene.data)) ) )
+    params <- curData$params # params = as.list(dataSet$initParams[1,])
+    dataSetID <- curData$dataSetID
     
+    meanSigma <- getMeanSigmaTwoTheta( params, dataSetID)
+   
     # rearrange covariance matrix to match the species order in the tree
-    idx <- order(match(colnames(dataSet$gene.data),dataSet$orderedSpcs))
+    idx <- order(match(colnames(dataSet$gene.data),dataSets[[dataSetID]]$orderedSpcs))
     meanSigma$sigma <- meanSigma$sigma[idx,idx]
     
     return(meanSigma)
   })
   
-  reactDataset <- reactive({
-    dataSet <- dataSets[[input$selData]]
-    return(dataSet)
-  })
   
-  # react to changes in either selData or selGene
-  reactDataSelect <- reactive({
-    dataSet <- dataSets[[input$selData]]
-    geneID <- input$selGene
-    
-    # TODO: fix so that this never happens:
-    if(!(geneID %in% rownames(dataSet$gene.data))) 
-      geneID <- rownames(dataSet$gene.data)[1]
-    
-    dataSet$geneID <- geneID
-    return(dataSet)
-  })
-  
-  reactDataRow <- reactive({
-    dataSet <- reactDataSelect()
 
-    gene.data.row <- dataSet$gene.data[dataSet$geneID, ]
-    return(gene.data.row)
-  })
-  
   output$treePlot <- renderPlot({
-    dataSet <- reactDataSelect()
+    dataSet <- dataSets[[curData$dataSetID]]
     dataSet$g_phylo + 
       geom_tiplab(align = T) +
       scale_y_continuous(limits = c(1,Ntip(dataSet$tree)),expand=expand_scale(add=1)) +
@@ -242,10 +302,10 @@ server <- function(input, output, session) {
   })
   
   output$exprPlot <- renderPlot({
-    dataSet <- reactDataSelect()
-    gene.data.row <- reactDataRow()
+    dataSet <- dataSets[[curData$dataSetID]]
+    gene.data.row <- curData$gene.data.row
     meanSigma <- reactMeanSigma()
-    params <- reactParams()
+    params <- curData$params
     
     # calculate measured species means
     spcMean <- 
@@ -292,41 +352,20 @@ server <- function(input, output, session) {
     
   })
   
-  # output$optimPlot <- renderPlot({
-  #   x <- optimReact()
-  #   as.tibble(x$paramIterations) %>%
-  #     mutate(iteration=1:n()) %>% 
-  #     gather(key = "param",value = "value", -iteration) %>% 
-  #     ggplot( aes(x=iteration,y=value)) + geom_point() + geom_line() + facet_grid( param ~ .,scales = "free_y")
-  # })
-  
-  # output$optimPlot <- renderRbokeh({
-  #   x <- optimReact()
-  #   myData <- as.tibble(x$paramIterations) %>% mutate(iteration=1:n())
-  #   
-  #   tools <- c("pan", "wheel_zoom", "box_zoom", "box_select", "reset")
-  #   
-  #   lapply(colnames(x$paramIterations), function(par){
-  #     figure(width = 800, height = 100, tools = tools,
-  #            xlab = "iteration", ylab = par) %>%
-  #       ly_points("iteration", par, data = myData,
-  #                 color = par, size = 5, legend = FALSE)
-  #     
-  #   }) -> splom_list
-  #   
-  #   grid_plot(splom_list, ncol = 1, same_axes = c(TRUE,FALSE))
-  # })
-  
   callModule(module = dyOptIterPlot, id= "optimPlot", 
              paramNames = c(paramNames,"ll"),
              paramListReact = reactive({
-               x <- optimReact()
+               x <- optRes$currentOpt
                if(is.null(x))
                  return(NULL)
                else
                  apply(x$paramIterations,2,function(col){data.frame(idx=seq_along(col),val=col)})
               }),
              group = "ho")
+  
+  output$restable <- renderDataTable({
+    optRes$all %>% filter(geneID == curData$geneID)
+  })
   
 }
 

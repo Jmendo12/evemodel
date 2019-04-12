@@ -212,7 +212,7 @@ server <- function(input, output, session) {
     optimResult <- initParams
     optimResult[!isParamFixed] <- res$optimRes$par
     optimResult <- bind_cols(as.data.frame(t(optimResult)),
-                             geneID=dataSet$geneID, ll= -res$optimRes$value)
+                             geneID=curData$geneID, ll= -res$optimRes$value)
 
     # update reactive values
     optRes$all <- bind_rows(optRes$all,optimResult) %>% distinct()
@@ -282,7 +282,7 @@ server <- function(input, output, session) {
     meanSigma <- getMeanSigmaTwoTheta( params, dataSetID)
    
     # rearrange covariance matrix to match the species order in the tree
-    idx <- order(match(colnames(dataSet$gene.data),dataSets[[dataSetID]]$orderedSpcs))
+    idx <- order(match(colnames(dataSets[[dataSetID]]$gene.data),dataSets[[dataSetID]]$orderedSpcs))
     meanSigma$sigma <- meanSigma$sigma[idx,idx]
     
     return(meanSigma)

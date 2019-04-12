@@ -89,7 +89,7 @@ fitIndivBeta2 <- function(tree, gene.data, colSpecies = colnames(gene.data))
     # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
     res <- tryCatch({
       optim( logTransformIndivBeta(initial.param.matrix[row, ]), fn = LLPerGeneIndivBeta2, gr = NULL, 
-             tree, gene.data[row, ], index.expand, method = "L-BFGS-B", upper = c(Inf, Inf, alphaMax, Inf))
+             tree, gene.data[row, ], index.expand, method = "L-BFGS-B", upper = logTransformIndivBeta(c(Inf, Inf, alphaMax, Inf)))
     }, error = function(e) {
       warning(paste(e$message, "at gene.data row", row), immediate. = T)
     })

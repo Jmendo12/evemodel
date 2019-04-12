@@ -14,6 +14,13 @@ compareTests <- function()
   cat("Old implementation took ", timeOld[1:3], " seconds \n\n")
   cat("New implementation was ", timeOld[1]/timeNew[1], " times faster than old\n\n")
   
+  tibble( new = sapply(new_res[["indivBetaRes"]],function(res)res$count[1]),
+          old = sapply(old_res[["indivBetaRes"]],function(res)res$count[1])) %>% 
+    mutate( idx=1:n()) %>% 
+    gather(key = "oldNew",value = "iterations", -idx) %>% 
+    ggplot( aes(x=idx,y=iterations, fill=oldNew) ) +
+    geom_col(position = "dodge")
+  
   cat("Return true if number of iterations for each gene with log  transform is less than number of iterations without for individual Beta: \n")
   betterIndiv <- mapply(function(newRow, oldRow) { newRow$counts[1] < oldRow$counts[1] }, 
                         new_res[["indivBetaRes"]], old_res[["indivBetaRes"]])

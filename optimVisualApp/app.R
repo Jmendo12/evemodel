@@ -299,12 +299,20 @@ server <- function(input, output, session) {
   
 
   output$treePlot <- renderPlot({
-    dataSet <- dataSets[[curData$dataSetID]]
-    dataSet$g_phylo + 
+    tree <- dataSets[[curData$dataSetID]]$tree
+    g_phylo <- dataSets[[curData$dataSetID]]$g_phylo
+    alpha <- curData$params$alpha
+
+    x <- seq(from=min(g_phylo$data$x),to=max(g_phylo$data$x),length.out = 200)
+    alphaStrip <- tibble( x=x,z=exp(-x*alpha))
+
+    g_phylo + 
       geom_tiplab(align = T) +
-      scale_y_continuous(limits = c(1,Ntip(dataSet$tree)),expand=expand_scale(add=1)) +
+      scale_y_continuous(limits = c(0,Ntip(tree)+1),expand=expand_scale(add=0)) +
       scale_x_continuous(expand=expand_scale(mult=c(0.01,0.21))) + 
       xlab(" ") + 
+      geom_tile( data = alphaStrip, aes(x=x,fill=z,y=0.3), height=0.4) +
+      scale_fill_gradient(low="white",high = "red",limits=c(0,1),guide = F) +
       theme_classic() +
       theme(axis.line.y = element_blank(),axis.text.y = element_blank(), axis.ticks.y = element_blank() )
   })

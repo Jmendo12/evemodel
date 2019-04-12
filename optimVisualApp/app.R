@@ -15,20 +15,42 @@ load("data.RData")
 # initialize a table to store optimization results
 resTblInit <- bind_rows(
   tibble(geneID=character(),theta1=numeric(),theta2=numeric(),sigma2=numeric(),alpha=numeric(),
-         beta=numeric(),ll=numeric()),
+         beta=numeric(),ll=numeric(), iterations=integer(),convCode=integer(), transform=character()),
   rownames_to_column(as.data.frame(dataSets$salmon20$initParams),var = "geneID"),
   rownames_to_column(as.data.frame(dataSets$sim$initParams),var = "geneID"))
 
 # define the names of the parameters here
 paramNames = c("theta1", "theta2", "sigma2", "alpha", "beta")
 
+parTransFuns <- list(
+  none = list(
+    trans = function(par){par},
+    untrans = function(par){par}
+  ),
+  log = list(
+    trans = function(par){
+      setNames(ifelse( names(par) %in% c("sigma2", "alpha", "beta"), log(par), par), names(par))
+    },
+    untrans = function(par){
+      setNames(ifelse( names(par) %in% c("sigma2", "alpha", "beta"), exp(par), par), names(par))
+    }),
+  rho = list(
+    trans = function(par){
+      par["sigma2"] <- par["sigma2"]/(2*par["alpha"])
+      par
+    },
+    untrans = function(par){
+      par["sigma2"] <- par["sigma2"]*(2*par["alpha"])
+      par
+    })
+)
+
 # dataSetID <- "salmon20"
-# geneID <- "OG0000053_2"
-# params <- as.list(dataSet$initParams[geneID,])
+# params <- as.list(dataSets[[dataSetID]]$initParams[3,])
 getMeanSigmaTwoTheta <- function(params, dataSetID)
 {
   tree <- dataSets[[dataSetID]]$tree
-  shiftSpecies <- dataSets[[dataSetID]]$shiftSpeciestree
+  shiftSpecies <- dataSets[[dataSetID]]$shiftSpecies
   colSpecies <- colnames(dataSets[[dataSetID]]$gene.data)
   
   isThetaShiftEdge <- 1:Nedge(tree) %in% getEdgesFromMRCA(tree, tips = shiftSpecies)
@@ -62,7 +84,7 @@ getMeanSigmaTwoTheta <- function(params, dataSetID)
 # gene.data.row = curData$gene.data.row
 # initParams <- unlist(curData$params)
 # isParamFixed = c(F,F,F,F,F)
-fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixed){
+fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixed, transFun = parTransFuns$none){
   tree <- dataSets[[dataSetID]]$tree
   shiftSpecies <- dataSets[[dataSetID]]$shiftSpecies
   colSpecies <- colnames(dataSets[[dataSetID]]$gene.data)
@@ -77,11 +99,14 @@ fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixe
   
   paramIterations <- numeric()
   
+  initParams <- transFun$trans(initParams)
+  
   # function to optimize
   LLPerGeneTwoTheta <- function(par)
   {
     params <- initParams
     params[!isParamFixed] <- par
+    params <- transFun$untrans(params)
     ll <- logLikTwoTheta( theta1 = params[1], theta2 = params[2], sigma2 = params[3],
                           alpha = params[4], beta = params[5],
                           tree = tree, isThetaShiftEdge = isThetaShiftEdge, 
@@ -91,8 +116,10 @@ fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixe
   }
   
   res <- optim( par = initParams[!isParamFixed], fn = LLPerGeneTwoTheta, method = "L-BFGS-B",
-           lower = c(-Inf, -Inf, 1e-10, 1e-10, 1e-3)[!isParamFixed], 
-           upper = c(Inf, Inf, Inf, alphaMax, Inf)[!isParamFixed])
+           lower = transFun$trans(c(-Inf, -Inf, 1e-10, 1e-10, 1e-3))[!isParamFixed], 
+           upper = transFun$trans(c(Inf, Inf, Inf, alphaMax, Inf))[!isParamFixed])
+  
+  res$par <- transFun$untrans(res$par)
   
   return(list(optimRes = res, paramIterations=paramIterations))
 }
@@ -109,6 +136,7 @@ ui <- fixedPage(
     column( 3,
       selectInput("selData",label = "Dataset:",choices = names(dataSets)),
       selectInput("selGene",label = "Gene:",choices = rownames(dataSets[[1]]$gene.data)),
+      selectInput("selTrans",label = "Transform:",choices = names(parTransFuns)),
       wellPanel( # parameter inputs
         tags$table(
           tags$tr(
@@ -209,18 +237,22 @@ server <- function(input, output, session) {
   observeEvent( input$runOptim, {
     initParams <- unlist(curData$params)
     isParamFixed <- reactParamFix()
+    transFun <- parTransFuns[[input$selTrans]]
     
     res <- fitTwoThetasVarFix(
       dataSetID = curData$dataSetID,
       gene.data.row = curData$gene.data.row,
       initParams = initParams,
-      isParamFixed = isParamFixed)
+      isParamFixed = isParamFixed,
+      transFun = transFun)
     
     # add result to list
     optimResult <- initParams
     optimResult[!isParamFixed] <- res$optimRes$par
     optimResult <- bind_cols(as.data.frame(t(optimResult)),
-                             geneID=curData$geneID, ll= -res$optimRes$value)
+                             geneID=curData$geneID, ll= -res$optimRes$value,
+                             iterations=res$optimRes$counts[1],convCode=res$optimRes$convergence,
+                             transform=input$selTrans)
 
     # update reactive values
     optRes$all <- bind_rows(optRes$all,optimResult) %>% distinct()

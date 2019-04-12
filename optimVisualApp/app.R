@@ -23,8 +23,8 @@ resTblInit <- bind_rows(
 paramNames = c("theta1", "theta2", "sigma2", "alpha", "beta")
 
 # dataSetID <- "salmon20"
-# dataSet$geneID <- "OG0000053_2"
-# params <- as.list(dataSet$initParams[dataSet$geneID,])
+# geneID <- "OG0000053_2"
+# params <- as.list(dataSet$initParams[geneID,])
 getMeanSigmaTwoTheta <- function(params, dataSetID)
 {
   tree <- dataSets[[dataSetID]]$tree
@@ -52,11 +52,19 @@ getMeanSigmaTwoTheta <- function(params, dataSetID)
               sigma = expanded.matrix$cov.matr))
 }
 
-# initParams=dataSet$initParams[dataSet$geneID, ]
+# curData <- list()
+# curData$dataSetID <- "salmon20"
+# curData$geneID <- "OG0000053_2"
+# curData$params <- as.list(dataSets[[curData$dataSetID]]$initParams[curData$geneID, ])
+# curData$gene.data.row = dataSets[[curData$dataSetID]]$gene.data[curData$geneID,]
+# 
+# dataSetID = curData$dataSetID
+# gene.data.row = curData$gene.data.row
+# initParams <- unlist(curData$params)
 # isParamFixed = c(F,F,F,F,F)
 fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixed){
   tree <- dataSets[[dataSetID]]$tree
-  shiftSpecies <- dataSets[[dataSetID]]$shiftSpeciestree
+  shiftSpecies <- dataSets[[dataSetID]]$shiftSpecies
   colSpecies <- colnames(dataSets[[dataSetID]]$gene.data)
   
   isThetaShiftEdge <- 1:Nedge(tree) %in% getEdgesFromMRCA(tree, tips = shiftSpecies)
@@ -166,7 +174,7 @@ server <- function(input, output, session) {
     for( param in names(res$optimRes$par)){
       cat('updateNumericInput(session, inputID="',param,'", value = ',res$optimRes$par[param],'\n',sep = "")
       updateNumericInput(session, param, value = as.vector(res$optimRes$par[param]))
-    }  
+    }
   })
   
   observeEvent( input$simulate, {

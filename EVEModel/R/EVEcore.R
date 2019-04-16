@@ -45,11 +45,11 @@ calcExpVarOU <- function(tree, thetas, alphas, sigma2s,
 {
   # Declare vectors of expectation values and variances for all tips
   # and internal nodes
-  expected.mean <- numeric( Ntip(tree) + Nnode(tree) )
-  evol.variance <- numeric( Ntip(tree) + Nnode(tree) )
+  expected.mean <- numeric( ape::Ntip(tree) + ape::Nnode(tree) )
+  evol.variance <- numeric( ape::Ntip(tree) + ape::Nnode(tree) )
 
   # Get the order of the edges to traverse from root to tips
-  edgeOrder <- rev(postorder(tree))
+  edgeOrder <- rev(ape::postorder(tree))
 
   # Get index of root
   root.index <- tree$edge[edgeOrder[1], 1]
@@ -92,10 +92,10 @@ calcCovMatOU <- function(tree, alphas, evol.variance)
   attenuationTree$edge.length <- attenuationTree$edge.length * alphas
 
   # calculate the attenuation matrix using the cophenetic distance function
-  attenuation.Matrix <- cophenetic(attenuationTree)
+  attenuation.Matrix <- stats::cophenetic(attenuationTree)
 
   # get matrix of variances of the most recent common ancestors
-  variance.MRCA <- apply(mrca(tree), 1:2, function(i) evol.variance[i])
+  variance.MRCA <- apply(ape::mrca(tree), 1:2, function(i) evol.variance[i])
 
   # Return the covariance matrix
   return (variance.MRCA * exp(-attenuation.Matrix))
@@ -118,7 +118,7 @@ expandECovMatrix <- function(expected.mean, covar.matrix, sigma2, alpha, beta, i
 
 # silly function with same values of parameters across the tree
 calcExpVarOUconst <- function(tree, theta, alpha, sigma2){
-  N <- Nedge(tree)
+  N <- ape::Nedge(tree)
   calcExpVarOU(tree, thetas = rep(theta,N), alphas = rep(alpha,N), sigma2s = rep(sigma2,N),
                rootVar = sigma2/(2*alpha), rootE = theta)
 }
@@ -138,7 +138,7 @@ logLikOU <- function(theta, sigma2, alpha, beta, tree, gene.data.row, index.expa
                                       sigma2, alpha, beta, index.expand)
 
   # Get log likelihood from the multivariate normal distribution density
-  ll <- dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
+  ll <- mvtnorm::dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
   return(ll)
 }
 
@@ -146,7 +146,7 @@ logLikOU <- function(theta, sigma2, alpha, beta, tree, gene.data.row, index.expa
 # isThetaShiftEdge logical vector specifying if the theta2 or theta1 shall be used
 logLikTwoTheta <- function(theta1, theta2, sigma2, alpha, beta, tree, isThetaShiftEdge, gene.data.row, index.expand)
 {
-  N <- Nedge(tree)
+  N <- ape::Nedge(tree)
   expression.var <- calcExpVarOU(tree, thetas = ifelse(isThetaShiftEdge,theta2,theta1),
                                  alphas = rep(alpha,N), sigma2s = rep(sigma2,N),
                                  rootVar = sigma2/(2*alpha), rootE = theta1)
@@ -157,6 +157,6 @@ logLikTwoTheta <- function(theta1, theta2, sigma2, alpha, beta, tree, isThetaShi
                                       sigma2, alpha, beta, index.expand)
 
   # Get log likelihood from the multivariate normal distribution density
-  ll <- dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
+  ll <- mvtnorm::dmvnorm(x = gene.data.row, mean = expanded.matrix$expected.mean, sigma = expanded.matrix$cov.matr, log = TRUE )
   return(ll)
 }

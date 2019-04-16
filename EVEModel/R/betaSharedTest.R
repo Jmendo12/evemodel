@@ -31,7 +31,7 @@ fitIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.data))
   lapply(1:nrow(gene.data), function(row){
     # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
     res <- tryCatch({
-      optim(initial.param.matrix[row, ], fn = LLPerGeneIndivBeta, gr = NULL, tree, gene.data[row, ], index.expand,
+      stats::optim(initial.param.matrix[row, ], fn = LLPerGeneIndivBeta, gr = NULL, tree, gene.data[row, ], index.expand,
             method = "L-BFGS-B", lower = c(-Inf, 1e-10, 1e-10, 1e-10), upper = c(Inf, Inf, alphaMax, Inf))
     }, error = function(e) {
       warning(paste(e$message, "at gene.data row", row), immediate. = T)
@@ -64,7 +64,7 @@ fitSharedBeta <- function(betaShared, tree, gene.data, colSpecies = colnames(gen
 
   # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
   lapply(1:nrow(gene.data), function(row){
-    optim( initial.param.matrix[row, 1:3], fn = LLPerGeneSharedBeta, method = "L-BFGS-B",
+    stats::optim( initial.param.matrix[row, 1:3], fn = LLPerGeneSharedBeta, method = "L-BFGS-B",
            lower = c(-Inf, 1e-10, 1e-10, 1e-10), upper = c(Inf, Inf, alphaMax, Inf),
            betaShared= betaShared,
            tree = tree, gene.data.row = gene.data[row, ], index.expand=index.expand)
@@ -99,7 +99,7 @@ betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data)){
   indivBetaRes <- fitIndivBeta(tree,gene.data,colSpecies)
 
   cat("Estimate shared beta...\n")
-  sharedBetaFit <- optimize(f = LLSharedBeta,interval=c(0.0001,100),
+  sharedBetaFit <- stats::optimize(f = LLSharedBeta,interval=c(0.0001,100),
                             tree=tree, gene.data=gene.data)
   sharedBeta <- sharedBetaFit$minimum
 

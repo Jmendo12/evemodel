@@ -15,7 +15,8 @@ load("data.RData")
 # initialize a table to store optimization results
 resTblInit <- bind_rows(
   tibble(geneID=character(),theta1=numeric(),theta2=numeric(),sigma2=numeric(),alpha=numeric(),
-         beta=numeric(),ll=numeric(), iterations=integer(),convCode=integer(), transform=character()),
+         beta=numeric(),ll=numeric(), rho=numeric(), tau=numeric(), 
+         iterations=integer(),convCode=integer(), transform=character()),
   rownames_to_column(as.data.frame(dataSets$salmon20$initParams),var = "geneID"),
   rownames_to_column(as.data.frame(dataSets$sim$initParams),var = "geneID"))
 
@@ -36,12 +37,14 @@ parTransFuns <- list(
     }),
   rho = list(
     trans = function(par){
-      par["sigma2"] <- par["sigma2"]/(2*par["alpha"])
-      par
+      with(as.list(par),
+           c( theta1=theta1, theta2=theta2, alpha=alpha,
+              rho=sigma2/(2*alpha), tau=beta*sigma2/(2*alpha)))
     },
     untrans = function(par){
-      par["sigma2"] <- par["sigma2"]*(2*par["alpha"])
-      par
+      with(as.list(par),
+           c( theta1=theta1, theta2=theta2, sigma2 = 2*rho*alpha,
+              alpha=alpha, beta = tau/rho))
     })
 )
 
@@ -99,7 +102,6 @@ fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixe
   
   paramIterations <- numeric()
   
-  initParams <- transFun$trans(initParams)
   
   # function to optimize
   LLPerGeneTwoTheta <- function(par)
@@ -117,12 +119,27 @@ fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixe
   
   # make sure the initial parameters are in the correct order
   initParams <- initParams[paramNames]
+
+  # transform
+  initParams <- transFun$trans(initParams)
   
   cat("optim initial values:", paste(names(initParams),"=",initParams),"\n")
+  lowBound   <- transFun$trans(
+    c(theta1 = -99, theta2 = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001))[!isParamFixed]
+  upperBound <- transFun$trans(
+    c(theta1 = 99, theta2 = 99, sigma2 = 9999, alpha = 999, beta = 99))[!isParamFixed]
+    
+  cat("lower bounds:", paste(names(lowBound),"=",lowBound),"\n")
+  cat("upper bounds:", paste(names(upperBound),"=",upperBound),"\n")
+  
   
   res <- optim( par = initParams[!isParamFixed], fn = LLPerGeneTwoTheta, method = "L-BFGS-B",
-           lower = transFun$trans(c(-Inf, -Inf, 1e-10, 1e-10, 1e-3))[!isParamFixed], 
-           upper = transFun$trans(c(Inf, Inf, Inf, alphaMax, Inf))[!isParamFixed])
+                lower = lowBound, 
+                upper = upperBound)
+  # lower = transFun$trans(c(-99, -99, 0.001, 0.001, 0.001))[!isParamFixed], 
+                # upper = transFun$trans(c(99, 99, 999, 999, 999))[!isParamFixed])
+  # lower = transFun$trans(c(-Inf, -Inf, 1e-10, 1e-10, 1e-3))[!isParamFixed], 
+           # upper = transFun$trans(c(Inf, Inf, .Machine$double.xmax, alphaMax, .Machine$double.xmax))[!isParamFixed])
   
   res$par <- transFun$untrans(res$par)
   
@@ -254,13 +271,15 @@ server <- function(input, output, session) {
     # add result to list
     optimResult <- initParams
     optimResult[!isParamFixed] <- res$optimRes$par
-    optimResult <- bind_cols(as.data.frame(t(optimResult)),
-                             geneID=curData$geneID, ll= -res$optimRes$value,
-                             iterations=res$optimRes$counts[1],convCode=res$optimRes$convergence,
-                             transform=input$selTrans)
+    optimResult <- as.data.frame(t(optimResult)) %>% 
+      mutate( rho = sigma2/(2*alpha),
+              tau = beta*rho, 
+              geneID=curData$geneID, ll= -res$optimRes$value,
+              iterations=res$optimRes$counts[1],convCode=res$optimRes$convergence,
+              transform=input$selTrans)
 
     # update reactive values
-    optRes$all <- bind_rows(optRes$all,optimResult) %>% distinct()
+    optRes$all <- bind_rows(optimResult,optRes$all) %>% distinct()
     optRes$currentOpt <- res
   })
   

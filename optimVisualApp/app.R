@@ -115,6 +115,11 @@ fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixe
     return(-ll)
   }
   
+  # make sure the initial parameters are in the correct order
+  initParams <- initParams[paramNames]
+  
+  cat("optim initial values:", paste(names(initParams),"=",initParams),"\n")
+  
   res <- optim( par = initParams[!isParamFixed], fn = LLPerGeneTwoTheta, method = "L-BFGS-B",
            lower = transFun$trans(c(-Inf, -Inf, 1e-10, 1e-10, 1e-3))[!isParamFixed], 
            upper = transFun$trans(c(Inf, Inf, Inf, alphaMax, Inf))[!isParamFixed])
@@ -146,10 +151,10 @@ ui <- fixedPage(
             tags$td("theta2"), tags$td( numericInput("theta2",NULL,1)), tags$td( checkboxInput("theta2Fix", NULL))
           ),
           tags$tr(
-            tags$td("alpha"), tags$td( numericInput("alpha",NULL,0.5)), tags$td( checkboxInput("alphaFix", NULL))
+            tags$td("sigma2"), tags$td( numericInput("sigma2",NULL,1)), tags$td( checkboxInput("sigma2Fix", NULL))
           ),
           tags$tr(
-            tags$td("sigma2"), tags$td( numericInput("sigma2",NULL,1)), tags$td( checkboxInput("sigma2Fix", NULL))
+            tags$td("alpha"), tags$td( numericInput("alpha",NULL,0.5)), tags$td( checkboxInput("alphaFix", NULL))
           ),
           tags$tr(
             tags$td("beta"), tags$td( numericInput("beta",NULL,1)), tags$td( checkboxInput("betaFix", NULL))
@@ -294,8 +299,8 @@ server <- function(input, output, session) {
     list(
       theta1 = input$theta1,
       theta2 = input$theta2,
-      alpha = input$alpha,
       sigma2 = input$sigma2,
+      alpha = input$alpha,
       beta = input$beta
     )
   })
@@ -309,8 +314,8 @@ server <- function(input, output, session) {
     c(
       theta1 = input$theta1Fix,
       theta2 = input$theta2Fix,
-      alpha = input$alphaFix,
       sigma2 = input$sigma2Fix,
+      alpha = input$alphaFix,
       beta = input$betaFix
     )
   })

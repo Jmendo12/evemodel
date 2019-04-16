@@ -136,11 +136,7 @@ fitTwoThetasVarFix <- function(dataSetID, gene.data.row, initParams, isParamFixe
   res <- optim( par = initParams[!isParamFixed], fn = LLPerGeneTwoTheta, method = "L-BFGS-B",
                 lower = lowBound, 
                 upper = upperBound)
-  # lower = transFun$trans(c(-99, -99, 0.001, 0.001, 0.001))[!isParamFixed], 
-                # upper = transFun$trans(c(99, 99, 999, 999, 999))[!isParamFixed])
-  # lower = transFun$trans(c(-Inf, -Inf, 1e-10, 1e-10, 1e-3))[!isParamFixed], 
-           # upper = transFun$trans(c(Inf, Inf, .Machine$double.xmax, alphaMax, .Machine$double.xmax))[!isParamFixed])
-  
+
   res$par <- transFun$untrans(res$par)
   
   return(list(optimRes = res, paramIterations=paramIterations))

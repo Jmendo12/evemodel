@@ -1,9 +1,12 @@
 Package: EVEModel
 Type: Package
 Title: Expression Variance Evolution Model
-Version: 0.1.0
-Author: Rori Rohlfs, Lars Gronvold, John Mendoza
-Maintainer: Lars Gronvold <lars.gronvold@nmbu.no@>
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Rori", "Rohlfs", email = "rrohlfs@gmail.com", role = c("aut")),
+    person("Lars", "Gronvold", email = "lars.gronvold@nmbu.no", role = c("aut", "cre")),
+    person("John", "Mendoza", email = "jmendo12@mail.sfsu.edu", role = "aut"))
+URL: https://github.com/Jmendo12/EVE-Model
 Imports:
     ape (>= 5.2),
     mvtnorm (>= 1.0-8),

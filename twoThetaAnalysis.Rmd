@@ -1,0 +1,251 @@
+---
+title: "Two-theta model analysis"
+output:
+  html_document: 
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(tidyverse)
+library(ape)
+
+source("scripts/EVEcore.R")
+source("scripts/eve-io.R")
+source("scripts/twoThetaTest.R")
+```
+
+```{r loadData}
+tree <- read.tree("data/comparison/newFormat/salmonData/salmonidsPhylo.newick")
+gene.data <- getExprData("data/comparison/newFormat/salmonData/salmon20.tsv")
+
+shiftSpecies <- c("Salp","Okis","Omyk","Ssal")
+initParams <- initialParamsTwoTheta(gene.data,colSpecies = colnames(gene.data),shiftSpecies = shiftSpecies)
+
+lowerBound <- c(theta1 = -99, theta2 = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001)
+upperBound <- c(theta1 =  99, theta2 =  99, sigma2 =   9999, alpha = 999  , beta = 99   )
+```
+
+```{r defFun}
+
+parTransFuns <- list(
+  none = list(
+    trans = function(par){par},
+    untrans = function(par){par}
+  ),
+  log = list(
+    trans = function(par){
+      with(as.list(par),
+           c( theta1 = theta1, theta2 = theta2, 
+              sigma2 = log(sigma2), alpha = log(alpha), beta = log(beta)))
+    },
+    untrans = function(par){
+      with(as.list(par),
+           c( theta1 = theta1, theta2 = theta2, 
+              sigma2 = exp(sigma2), alpha = exp(alpha), beta = exp(beta)))
+    }),
+  rho = list(
+    trans = function(par){
+      with(as.list(par),
+           c( theta1=theta1, theta2=theta2, alpha=alpha,
+              rho=sigma2/(2*alpha), tau=beta*sigma2/(2*alpha)))
+    },
+    untrans = function(par){
+      with(as.list(par),
+           c( theta1=theta1, theta2=theta2, sigma2 = 2*rho*alpha,
+              alpha=alpha, beta = tau/rho))
+    })
+)
+
+fitTwoThetasTrans <- function( tree, shiftSpecies, colSpecies, gene.data.row, 
+                               initParams, lowerBound, upperBound,
+                               trans = c("none","log","rho")){
+  
+  transFun <- parTransFuns[[match.arg(trans)]]
+
+  isThetaShiftEdge <- 1:Nedge(tree) %in% getEdgesFromMRCA(tree, tips = shiftSpecies)
+  
+  # match the column species with the phylogeny tip labels
+  index.expand <- match(colSpecies, tree$tip.label)
+
+  # function to optimize
+  LLPerGeneTwoTheta <- function(par)
+  {
+    params <- transFun$untrans(par)
+    ll <- logLikTwoTheta( theta1 = params[1], theta2 = params[2], sigma2 = params[3],
+                          alpha = params[4], beta = params[5],
+                          tree = tree, isThetaShiftEdge = isThetaShiftEdge, 
+                          gene.data.row = gene.data.row, index.expand = index.expand)
+    return(-ll)
+  }
+  
+  # This doesn't seem to work..
+  # if( trans == "rho"){
+  #   # rho transform uses inverse of alpha, therefore swap upper and lower bound of alpha
+  #   tmp <- lowerBound["alpha"]
+  #   lowerBound["alpha"] <- upperBound["alpha"]
+  #   upperBound["alpha"] <- tmp
+  # }
+    
+  res <- optim( par = transFun$trans(initParams), fn = LLPerGeneTwoTheta, method = "L-BFGS-B",
+                lower = transFun$trans(lowerBound), 
+                upper = transFun$trans(upperBound))
+
+  res$par <- transFun$untrans(res$par)
+  
+  return(res)
+}
+
+```
+
+```{r fitAll, cache=T}
+lapply(c("log","none") %>% setNames(.,.), function(trans){
+  lapply(rownames(gene.data), function(geneID){
+    fitTwoThetasTrans(tree = tree, shiftSpecies = shiftSpecies, colSpecies =colnames(gene.data), 
+                      gene.data.row = gene.data[geneID, ], 
+                      initParams = initParams[geneID, ], 
+                      trans = trans,
+                      lowerBound = lowerBound, upperBound = upperBound)
+  })  
+}) -> resAll
+
+resTbl <- 
+  lapply(resAll,function(resTrans){
+    t(sapply(resTrans, function(res) res$par)) %>% 
+    as.tibble() %>% 
+    mutate( geneID=rownames(gene.data),
+            ll = sapply(resTrans, function(res) -res$value),
+            convergence = map_int(resTrans, "convergence"),
+            iterations = sapply(resTrans, function(res) res$counts[1]))
+  }) %>% 
+  bind_rows(.id = "trans")
+```
+
+## log transform and bounds
+
+### effect on iterations
+
+```{r plotIterations}
+resTbl %>% 
+  mutate( geneID = factor(geneID,levels=rev(unique(geneID)))) %>% 
+  mutate( convergence = convergence==0 ) %>% 
+  ggplot( aes(x=geneID,y=iterations, fill=trans, color=convergence)) +
+  geom_col(position = "dodge",width = 0.7) +
+  scale_color_manual( values = c("green","black")) +
+  coord_flip()
+```
+
+### parameter estimates
+
+```{r plotPars}
+
+resTbl %>%
+  select(-theta1,-theta2, -iterations) %>% 
+  group_by(geneID) %>%
+  mutate( llDiff = ll - mean(ll)) %>% 
+  ungroup() %>% 
+  select(-ll) %>% 
+  gather(key = "Parameter", value = "Value", -geneID, -trans, -convergence, -llDiff) %>%
+  mutate( geneID = factor(geneID,levels=rev(unique(geneID)))) %>% 
+  mutate( atUpperBound = Value > (upperBound[Parameter]*0.999)) %>%
+  mutate( atLowerBound = Value < (lowerBound[Parameter]*1.001)) %>%
+  mutate( atBounds = atUpperBound | atLowerBound) %>% 
+  ggplot( aes(x=Value,y=geneID, color=llDiff, shape=trans)) + 
+  geom_point( size=3) + 
+  scale_shape_manual(values = c(3,4)) +
+  scale_color_gradient2(low="blue",mid="black", high="red") +
+  facet_grid(. ~ Parameter ,scales = "free") +
+  theme(legend.position="bottom") +
+  scale_x_log10() +
+  geom_vline(data=tibble(x=upperBound[3:5],Parameter=names(upperBound[3:5])),aes(xintercept=x),
+             color="red",linetype=3)
+
+```
+
+
+## overfitting alpha to the mean?
+
+### Expected expression {.tabset}
+```{r plotExp,results="asis"}
+# plot the expression on Y and time since shift on the X. + Expected expression trend line.
+
+# get time since shift
+mrcaNode <- getMRCA(tree,shiftSpecies)
+spcNodes <- match(shiftSpecies,tree$tip.label)
+timeSinceShift <- setNames(dist.nodes(tree)[mrcaNode,spcNodes], shiftSpecies)
+
+for( gene in rownames(gene.data)){
+
+  cat("\n\n####",gene,"\n")
+  
+  with(as.list(resTbl %>% filter(geneID==gene, trans=="log")),{
+    trendLine <- 
+      tibble(timeSinceShift = seq(0,max(timeSinceShift),length.out = 100)) %>% 
+      mutate( expLevel = theta2 + (theta1-theta2) * exp(-alpha * timeSinceShift))
+    
+    tibble(expLevel=gene.data[gene,], spc=colnames(gene.data)) %>% 
+      mutate( timeSinceShift = ifelse(spc %in% shiftSpecies,timeSinceShift[spc],0) ) %>% 
+      ggplot( aes( x = timeSinceShift, y = expLevel)) +
+      geom_point() +
+      geom_line( data=trendLine, color="red",linetype=2) +
+      geom_hline(yintercept=theta1, color="blue",linetype=3) +
+      annotate( "text", label="theta1",x=0.02,y=theta1, color="blue", vjust=-0.5) +
+      geom_hline(yintercept=theta2, color="blue",linetype=3) + 
+      annotate( "text", label="theta2",x=0.02,y=theta2, color="blue", vjust=-0.5) +
+      ggtitle(paste0(gene,"  sigma2 = ",signif(sigma2,3),"  alpha = ",signif(alpha,3), "  beta = ", signif(beta,3)))
+  }) -> g
+  print(g)
+  
+}
+
+```
+
+### facet version
+
+```{r plotExpFacet, fig.height=14}
+# plot the expression on Y and time since shift on the X. + Expected expression trend line.
+
+# get time since shift
+mrcaNode <- getMRCA(tree,shiftSpecies)
+spcNodes <- match(shiftSpecies,tree$tip.label)
+timeSinceShift <- setNames(dist.nodes(tree)[mrcaNode,spcNodes], shiftSpecies)
+
+paramTbl <-
+  resTbl %>% 
+  filter( trans=="log") %>% 
+  select( geneID, alpha, theta1, theta2)
+
+trendFun <- function(theta1, theta2, alpha, timeSinceShift){
+  tibble( expLevel = theta2 + (theta1-theta2) * exp(-alpha * timeSinceShift),
+          timeSinceShift = timeSinceShift)
+}
+
+timeSeq <- seq(0,max(timeSinceShift),length.out = 100)
+
+trendLines <- 
+  paramTbl %>% 
+  group_by( geneID ) %>% 
+  do( expLevel = trendFun(.$theta1, .$theta2, .$alpha, timeSeq)) %>% 
+  unnest()
+
+
+tibble( expLevel = as.vector(gene.data), 
+        spc = rep(colnames(gene.data), each=nrow(gene.data)),
+        geneID = rep(rownames(gene.data), ncol(gene.data))) %>% 
+  mutate( timeSinceShift = ifelse(spc %in% shiftSpecies,timeSinceShift[spc],0) ) %>% 
+  ggplot( aes( x = timeSinceShift, y = expLevel)) +
+  geom_point() +
+  geom_line( data=trendLines, color="red",linetype=2) +
+  geom_hline( data=paramTbl, aes(yintercept=theta1), color="blue",linetype=3) +
+  geom_text( data=paramTbl,aes(y=theta1), label="theta1",x=0.02, color="blue", vjust=-0.2, size=3) +
+  geom_hline( data=paramTbl, aes(yintercept=theta2), color="darkgreen",linetype=3) +
+  geom_text( data=paramTbl,aes(y=theta2), label="theta2",x=0.02, color="darkgreen", vjust=1.2, size=3) +
+  facet_wrap( ~ geneID, ncol=4)
+```
+

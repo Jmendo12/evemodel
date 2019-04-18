@@ -1,0 +1,30 @@
+Package: evemodel
+Type: Package
+Title: Expression Variance Evolution Model
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Rori", "Rohlfs", email = "rrohlfs@gmail.com", role = c("aut")),
+    person("Lars", "Gronvold", email = "lars.gronvold@nmbu.no", role = c("aut", "cre")),
+    person("John", "Mendoza", email = "jmendo12@mail.sfsu.edu", role = "aut"))
+URL: https://github.com/Jmendo12/EVE-Model
+Imports:
+    ape (>= 4.0),
+    mvtnorm (>= 1.0-4),
+    stats (>= 3.5.1)
+Description: An implementation of the Expression variance evolution model in R.
+    The EVE Model provides a new method for joint analyses of quantitative traits
+    within and between species. The model parametrizes the ratio of population to
+    evolutionary expression variance, and implements analyses such as a test for
+    lineage specific shifts in expression level, and a phylogenetic ANOVA
+    that can detect genes with increased or decreased ratios of expression
+    divergence to diversity. The model can be used for purposes such as
+    identifying genes with high expression divergence between species
+    as candidates for expression level adaptation, and genes with
+    high expression diversity within species as candidates for expression
+    level conservation and or plasticity. The model can also be used for
+    lineage-specific expression shifts in which candidate genes can be 
+    determined for expression level adaptation.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+RoxygenNote: 6.1.1

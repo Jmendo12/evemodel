@@ -15,6 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 library(tidyverse)
 library(ape)
+library(ggiraph)
 
 source("scripts/EVEcore.R")
 source("scripts/eve-io.R")
@@ -206,46 +207,78 @@ for( gene in rownames(gene.data)){
 
 ```
 
-### facet version
+## Alpha and Ssal expression
 
-```{r plotExpFacet, fig.height=14}
-# plot the expression on Y and time since shift on the X. + Expected expression trend line.
+Beacause of the phylogeny where Ssal has a significantly shorter branch than the other species and the decision to define the theta shift at the most recent common ancestor of the salmonids
 
-# get time since shift
-mrcaNode <- getMRCA(tree,shiftSpecies)
-spcNodes <- match(shiftSpecies,tree$tip.label)
-timeSinceShift <- setNames(dist.nodes(tree)[mrcaNode,spcNodes], shiftSpecies)
+```{r relSsalShiftPlot}
+colSpeciesIndices <- split(1:ncol(gene.data), f = colnames(gene.data))
+species.mean <- sapply(colSpeciesIndices, function(i){ rowMeans(gene.data[,i]) })
 
-paramTbl <-
-  resTbl %>% 
-  filter( trans=="log") %>% 
-  select( geneID, alpha, theta1, theta2)
+tibble(
+  geneID = rownames(gene.data),
+  preShift = rowMeans(species.mean[ ,c("Drer", "Eluc", "Olat")]),
+  postShift = rowMeans(species.mean[ ,c("Salp", "Okis", "Omyk")]),
+  Ssal = species.mean[ ,"Ssal"]
+) %>% 
+  mutate( relSsalShift = (Ssal-preShift) / (postShift-preShift)) %>% 
+  left_join( resTbl %>% filter(trans=="log") %>% select(geneID,alpha), by="geneID") %>% 
+  ggplot( aes(x=relSsalShift, y=alpha, color=alpha)) +
+  scale_color_gradientn(colours = c("blue","black","red"),trans = "log", breaks = c(10^(-1:3))) +
+  geom_point_interactive( aes(tooltip=geneID, data_id = geneID)) + 
+  scale_y_log10() -> g
 
-trendFun <- function(theta1, theta2, alpha, timeSinceShift){
-  tibble( expLevel = theta2 + (theta1-theta2) * exp(-alpha * timeSinceShift),
-          timeSinceShift = timeSinceShift)
+girafe(code = print(g))
+```
+
+## Between-/Within-species variance
+```{r betweenSpeciesVarPlot}
+
+# calculate expected mean based on parameters
+expLevel <- species.mean*0
+for( gene in rownames(species.mean)){
+  with(as.list(resTbl %>% filter(geneID==gene, trans=="log")),{
+    for( spc in colnames(species.mean)){
+      dt <- ifelse( spc %in% names(timeSinceShift),timeSinceShift,0)
+      expLevel[gene,spc] <<- theta2 + (theta1-theta2) * exp(-alpha * dt)
+    }
+  })
 }
 
-timeSeq <- seq(0,max(timeSinceShift),length.out = 100)
+# subtract the expected mean before calculating between species mean
+species.mean.adjusted <- species.mean - expLevel
 
-trendLines <- 
-  paramTbl %>% 
-  group_by( geneID ) %>% 
-  do( expLevel = trendFun(.$theta1, .$theta2, .$alpha, timeSeq)) %>% 
-  unnest()
-
-
-tibble( expLevel = as.vector(gene.data), 
-        spc = rep(colnames(gene.data), each=nrow(gene.data)),
-        geneID = rep(rownames(gene.data), ncol(gene.data))) %>% 
-  mutate( timeSinceShift = ifelse(spc %in% shiftSpecies,timeSinceShift[spc],0) ) %>% 
-  ggplot( aes( x = timeSinceShift, y = expLevel)) +
+tibble(
+  geneID = rownames(gene.data),
+  betweenSpeciesVar = apply(species.mean.adjusted,1,var)
+) %>% 
+  left_join( resTbl %>% filter(trans=="log"), by="geneID") %>% 
+  ggplot( aes(x=betweenSpeciesVar, y=sigma2/(2*alpha), color=alpha)) +
+  scale_color_gradientn(colours = c("blue","black","red"),trans = "log", breaks = c(10^(-1:3))) +
   geom_point() +
-  geom_line( data=trendLines, color="red",linetype=2) +
-  geom_hline( data=paramTbl, aes(yintercept=theta1), color="blue",linetype=3) +
-  geom_text( data=paramTbl,aes(y=theta1), label="theta1",x=0.02, color="blue", vjust=-0.2, size=3) +
-  geom_hline( data=paramTbl, aes(yintercept=theta2), color="darkgreen",linetype=3) +
-  geom_text( data=paramTbl,aes(y=theta2), label="theta2",x=0.02, color="darkgreen", vjust=1.2, size=3) +
-  facet_wrap( ~ geneID, ncol=4)
+  geom_point_interactive( aes(tooltip=geneID, data_id = geneID)) + 
+  geom_abline( slope=1, intercept=0, color="red", linetype=2) +
+  scale_x_log10() +
+  scale_y_log10() -> g
+
+girafe(code = print(g))  
 ```
+
+```{r withinSpeciesVarPlot}
+tibble(
+  geneID = rownames(gene.data),
+  withinSpeciesVar = rowMeans(sapply(colSpeciesIndices, function(i){ apply(gene.data[,i],1,var) }))
+) %>% 
+  left_join( resTbl %>% filter(trans=="log"), by="geneID") %>% 
+  ggplot( aes(x=withinSpeciesVar, y=beta*sigma2/(2*alpha), color=alpha)) +
+  scale_color_gradientn(colours = c("blue","black","red"),trans = "log", breaks = c(10^(-1:3))) +
+  geom_point() +
+  geom_point_interactive( aes(tooltip=geneID, data_id = geneID)) + 
+  geom_abline( slope=1, intercept=0, color="red", linetype=2) +
+  scale_x_log10() +
+  scale_y_log10() -> g
+
+girafe(code = print(g))  
+```
+
 

@@ -8,8 +8,8 @@ Authors@R: c(
     person("John", "Mendoza", email = "jmendo12@mail.sfsu.edu", role = "aut"))
 URL: https://github.com/Jmendo12/EVE-Model
 Imports:
-    ape (>= 5.2),
-    mvtnorm (>= 1.0-8),
+    ape (>= 4.0),
+    mvtnorm (>= 1.0-4),
     stats (>= 3.5.1)
 Description: An implementation of the Expression variance evolution model in R.
     The EVE Model provides a new method for joint analyses of quantitative traits

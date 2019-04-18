@@ -1,0 +1,110 @@
+---
+title: "Estimating between-species variance"
+output:
+  html_document: 
+    toc: yes
+    toc_float: yes
+    code_folding: hide
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(mvtnorm)
+library(tidyverse)
+```
+
+## Parameters 
+
+```{r parameters}
+n = 4 # n per species
+N = 7 # number of species
+
+bVar = 1 # between species var
+wVar = 1 # within species var
+
+K = 2000 # number of "genes"
+```
+
+## Simulate 
+
+```{r generate}
+# generate a multivariate distribution
+iExp = rep(1:N,each=n)
+sigma = diag(rep(bVar,N))[iExp,iExp] + diag(rep(wVar,N*n))
+dat <- rmvnorm(K,sigma = sigma)
+```
+
+```{r}
+image(sigma,col = colorRampPalette(c("white","red"))(100))
+```
+
+
+## Estimate variances, method 1
+
+* Between-species variance is esitmated as the variance between species means.
+* Within-species variance is esitmated as the mean of the species variances.
+
+```{r estimate1}
+# estimate parameters using var and mean
+colSpeciesIndices <- split(1:length(iExp), f = iExp)
+species.mean <- sapply(colSpeciesIndices, function(i){ rowMeans(dat[ ,i]) })
+species.var <- sapply(colSpeciesIndices, function(i){ apply(dat[ ,i],1,var) })
+bVarEst1 <- apply(species.mean,1,var)
+wVarEst1 <- rowMeans(species.var)
+```
+
+```{r plotEst1}
+qplot(bVarEst1,wVarEst1) + coord_fixed() +
+  geom_hline(yintercept = wVar, col="red") + 
+  geom_vline(xintercept = bVar, col="red") +
+  geom_smooth(method="lm")
+
+```
+
+## Estimate variances, method 2
+
+Use maximum likelihood to fit the data to multivariate normal distribution.
+
+```{r estimate2}
+# estimate using ML on mvnorm
+lapply(1:nrow(dat), function(i){
+  optim(par = log(c(10,10)), method = "L-BFGS-B", datRow = dat[i, ],
+        fn = function(par, datRow){
+          bVarEst = exp(par[1]); wVarEst = exp(par[2])
+          sigma = diag(rep(bVarEst,N))[iExp,iExp] + diag(rep(wVarEst,N*n))
+          ll = dmvnorm(x = datRow,sigma = sigma,log = T)  
+          # cat(sprintf("bVarEst:% 10.4f  wVarEst:% 10.4f  ll:% 10.4f\n",bVarEst,wVarEst,ll))
+          return(-ll)
+  })
+}) -> res
+
+bVarEst2 <- sapply(res, function(r) exp(r$par[1])) 
+wVarEst2 <- sapply(res, function(r) exp(r$par[2]))
+```
+
+```{r plotEstimate2}
+qplot(bVarEst2,wVarEst2) + coord_fixed() + 
+  geom_hline(yintercept = wVar, col="red") + 
+  geom_vline(xintercept = bVar, col="red") +
+  geom_smooth(method="lm")
+```
+
+## compare
+
+```{r plotCompare}
+qplot(bVarEst1,bVarEst2) + geom_abline(slope=1, intercept = 0, col="red")
+qplot(wVarEst1,wVarEst2) + geom_abline(slope=1, intercept = 0, col="red")
+```
+
+```{r plotComparebVarDist}
+tibble(bVarEst1,bVarEst2) %>% 
+  gather() %>% 
+  ggplot() +
+  geom_density( aes(x=value, color=key))
+```
+
+* Mean squared error for bVarEst1: `r mean((bVarEst1-bVar)^2)`
+* Mean squared error for bVarEst2: `r mean((bVarEst2-bVar)^2)`
+

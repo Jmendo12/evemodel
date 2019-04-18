@@ -5,6 +5,25 @@
 # Author: Rori Rohlfs, Lars Gronvold, John Mendoza
 # Date 2/25/19
 
+
+#' Likelihood for a gene assuming an individual beta.
+#'
+#' This function calculates the log likelihood for an individual gene assuming the gene has an individual beta value.
+#'
+#' Calculates the log likelihood for a gene with its own value for the beta parameter. The function calculates a log likelihood under
+#' the OU model with four paramaters - theta, sigma squared, alpha, and beta. This function uses a model where each gene has
+#' its own value for the beta parameter.
+#'
+#' @param param.matrix.row Numeric vector that contains the initial parameter estimates (theta, sigma2, alpha, beta)
+#' for a gene
+#' @param tree Phylogenic tree created from a .newick file
+#' @param gene.data.row Numeric vector that contains expression data of a gene
+#' @param index.expand Numeric which specifies the index on which to expand a covariance matrix
+#' @return A numeric value that represents the maximum likelihood of the gene.
+#' @examples
+#' optim(c(12.3, 6.1, .94, 3.6), fn = LLPerGeneIndivBeta,
+#' tree, gene.data, index.expand)
+#' optim(params, fn = LLPerGeneIndivBeta, tree, gene.data, index.expand)
 LLPerGeneIndivBeta <- function(param.matrix.row, tree, gene.data.row, index.expand)
 {
   ll <- -logLikOU( theta = param.matrix.row[1],
@@ -15,8 +34,14 @@ LLPerGeneIndivBeta <- function(param.matrix.row, tree, gene.data.row, index.expa
   return(ll)
 }
 
-
-# Maximum liklihood estimation of parameters with individual betas per gene
+#' Maximum liklihood estimation of paramaters fit with individual beta values for each gene.
+#'
+#' @param tree a phylogenic tree created from a .newick file
+#' @param gene.data a matrix which contains gene data
+#' @param colSpecies a vector which specifies the species for columns of the gene data matrix
+#' @examples
+#' test_res <- fitIndivBeta(tree, gene.data)
+#' test_res <- fitIndivBeta(tree, gene.data, colSpecies = c("a", "b"))
 fitIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.data))
 {
   #Calculate the per gene parameter matrix based on the gene data

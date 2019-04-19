@@ -15,7 +15,7 @@
 #' its own value for the beta parameter.
 #'
 #' @param param.matrix.row Numeric vector that contains the initial parameter estimates (theta, sigma2, alpha, beta)
-#' for a gene
+#'     for a gene
 #' @param tree Phylogenic tree created from a .newick file
 #' @param gene.data.row Numeric vector that contains expression data of a gene
 #' @param index.expand Numeric which specifies the index on which to expand a covariance matrix
@@ -34,11 +34,21 @@ LLPerGeneIndivBeta <- function(param.matrix.row, tree, gene.data.row, index.expa
   return(ll)
 }
 
-#' Maximum liklihood estimation of paramaters fit with individual beta values for each gene.
+#' Maximum likelihood estimation assuming an individual beta for each gene.
+#'
+#' Calculates the parameters to achieve the maximum likelihood for a gene assuming that each gene has it's own individual
+#'     beta value.
+#'
+#' Calculates the maximum likelihood for a gene and its associated parameters through optimizing the original parameter
+#'     estimates. This function assumes that each gene has its own individual beta value, and optimizes four parameters
+#'     using optim, to find the parameters that give the greatest likelihood.
 #'
 #' @param tree a phylogenic tree created from a .newick file
 #' @param gene.data a matrix which contains gene data
-#' @param colSpecies a vector which specifies the species for columns of the gene data matrix
+#' @param colSpecies a vector which specifies the species for columns of the gene data matrix. By default this parameter
+#'     is set to the column names contained within the gene data matrix.
+#' @return Returns a list which contains a list for each gene of their parameter values, the calculated maximum
+#'     likelihood, the number of optim iterations, and a message on the exit status of the optim routine
 #' @examples
 #' test_res <- fitIndivBeta(tree, gene.data)
 #' test_res <- fitIndivBeta(tree, gene.data, colSpecies = c("a", "b"))
@@ -66,6 +76,12 @@ fitIndivBeta <- function(tree, gene.data, colSpecies = colnames(gene.data))
   return(res)
 }
 
+#' Likelihood for a gene assuming a shared beta value.
+#'
+#' This function calculates the log likelihood for genes assuming that each
+#'     gene has the same beta value; a shared beta value between all genes.
+#'
+#'
 LLPerGeneSharedBeta <- function(param.matrix.row, betaShared, tree, gene.data.row, index.expand)
 {
   ll <- logLikOU( theta = param.matrix.row[1],

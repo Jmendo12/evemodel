@@ -1,8 +1,7 @@
 prepEVEmodel <- function(tree, index.expand, thetaIdx, alphaIdx, sigma2Idx, betaIdx){
   
-  
-  # how to define root variance and mean when different regimes are allowed?
-  
+  # Force evaluation of arguments. This helps detect syntax errors in the arguments earlier
+  force(index.expand); force(thetaIdx); force(alphaIdx); force(sigma2Idx); force(betaIdx)
   
   Nnodes <- Ntip(tree) + Nnode(tree)
   edgeOrder <- rev(postorder(tree))
@@ -80,8 +79,9 @@ prepEVEmodel <- function(tree, index.expand, thetaIdx, alphaIdx, sigma2Idx, beta
     # Expand covariance matrix
     sigma <- sigma[index.expand, index.expand]
     # Add within-species variance
-    diag(sigma) <- diag(sigma) + beta * sigma2s[tipEdges] / (2 * alphas[tipEdges])
-    
+    # diag(sigma) <- diag(sigma) + beta * sigma2s[tipEdges] / (2 * alphas[tipEdges]) # tipEdges should have been expanded
+    diag(sigma) <- diag(sigma)*(1+beta) # is this correct? It gives slight numerical differences that can result in diferrent paramet estimates
+
     # Return expanded sigma and mean (expected values)
     return(list(sigma=sigma, mean = expected.mean[index.expand]))
     
@@ -121,10 +121,10 @@ fitIndivBeta_fast <- function(tree, gene.data, colSpecies = colnames(gene.data))
   index.expand <- match(colSpecies, tree$tip.label)
   
   localEVEmodel <- prepEVEmodel(tree = tree,index.expand = index.expand,
-                               thetaIdx = rep(match("theta",params),Nedge(tree)),
-                               alphaIdx = rep(match("alpha",params),Nedge(tree)),
-                               sigma2Idx = rep(match("sigma2",params),Nedge(tree)),
-                               betaIdx = match("beta",params))
+                                thetaIdx = rep(match("theta",params),Nedge(tree)),
+                                alphaIdx = rep(match("alpha",params),Nedge(tree)),
+                                sigma2Idx = rep(match("sigma2",params),Nedge(tree)),
+                                betaIdx = match("beta",params))
   
   # Calculate max alpha based on the proportion of variance from covariance
   alphaMax <- -log(.01) / min(tree$edge.length[tree$edge[,2] <= Ntip(tree)])
@@ -145,6 +145,61 @@ fitIndivBeta_fast <- function(tree, gene.data, colSpecies = colnames(gene.data))
       warning(paste(e$message, "at gene.data row", row), immediate. = T)
     })
   }) -> res
+  
+  return(res)
+}
+
+
+# Include log transform and bounds
+fitIndivBeta_fast_log <- function(tree, gene.data, colSpecies = colnames(gene.data), 
+                                  lowerBound = c(theta = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001),
+                                  upperBound = c(theta =  99, sigma2 =   9999, alpha = 999  , beta = 99   ))
+{
+  #Calculate the per gene parameter matrix based on the gene data
+  initPar <- initialParams(gene.data, colSpecies)
+  paramNames <- colnames(initPar)
+  
+  
+  # log transform initial parameters and bounds
+  doTransPar <- paramNames %in% c("alpha","sigma2","beta") # which params to log transform
+  initPar[,doTransPar] <- log(initPar[,doTransPar])
+  lowerBound[c("alpha","sigma2","beta")] <- log(lowerBound[c("alpha","sigma2","beta")])
+  upperBound[c("alpha","sigma2","beta")] <- log(upperBound[c("alpha","sigma2","beta")])
+  
+  # match the column species with the phylogeny tip labels
+  index.expand <- match(colSpecies, tree$tip.label)
+  
+  localEVEmodel <- prepEVEmodel(tree = tree,index.expand = index.expand,
+                               thetaIdx = rep(match("theta",paramNames),Nedge(tree)),
+                               alphaIdx = rep(match("alpha",paramNames),Nedge(tree)),
+                               sigma2Idx = rep(match("sigma2",paramNames),Nedge(tree)),
+                               betaIdx = match("beta",paramNames))
+  
+  # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
+  lapply(1:nrow(gene.data), function(row){
+    # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
+    res <- tryCatch({
+      stats::optim(par = initPar[row, ], method = "L-BFGS-B", 
+                   lower = lowerBound, upper = upperBound,
+                   gene.data.row = gene.data[row, ],
+                   fn = function(par, gene.data.row){
+                     # reverse log transform parameters
+                     par[doTransPar] <- exp(par[doTransPar])
+                     
+                     mvnormParams <- localEVEmodel(par)
+                     return(-dmvnorm_nocheck(gene.data.row, sigma = mvnormParams$sigma, mean=mvnormParams$mean))
+                   })
+    }, error = function(e) {
+      warning(paste(e$message, "at gene.data row", row), immediate. = T)
+    })
+    # reverse log transform estimated parameters
+    res$par[doTransPar] <- exp(res$par[doTransPar])
+    return(res)
+  }) -> res
+  
+  # TODO: convert to data.frame?
+  # or maybe list of matrices?
+  
   
   return(res)
 }

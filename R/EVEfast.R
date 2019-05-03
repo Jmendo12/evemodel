@@ -153,7 +153,8 @@ fitIndivBeta_fast <- function(tree, gene.data, colSpecies = colnames(gene.data))
 # Include log transform and bounds
 fitIndivBeta_fast_log <- function(tree, gene.data, colSpecies = colnames(gene.data), 
                                   lowerBound = c(theta = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001),
-                                  upperBound = c(theta =  99, sigma2 =   9999, alpha = 999  , beta = 99   ))
+                                  upperBound = c(theta =  99, sigma2 =   9999, alpha = 999  , beta = 99   ),
+                                  logTransPars = c("alpha","sigma2","beta"))
 {
   #Calculate the per gene parameter matrix based on the gene data
   initPar <- initialParams(gene.data, colSpecies)
@@ -161,10 +162,10 @@ fitIndivBeta_fast_log <- function(tree, gene.data, colSpecies = colnames(gene.da
   
   
   # log transform initial parameters and bounds
-  doTransPar <- paramNames %in% c("alpha","sigma2","beta") # which params to log transform
+  doTransPar <- paramNames %in% logTransPars # which params to log transform
   initPar[,doTransPar] <- log(initPar[,doTransPar])
-  lowerBound[c("alpha","sigma2","beta")] <- log(lowerBound[c("alpha","sigma2","beta")])
-  upperBound[c("alpha","sigma2","beta")] <- log(upperBound[c("alpha","sigma2","beta")])
+  lowerBound[logTransPars] <- log(lowerBound[logTransPars])
+  upperBound[logTransPars] <- log(upperBound[logTransPars])
   
   # match the column species with the phylogeny tip labels
   index.expand <- match(colSpecies, tree$tip.label)
@@ -196,6 +197,80 @@ fitIndivBeta_fast_log <- function(tree, gene.data, colSpecies = colnames(gene.da
     res$par[doTransPar] <- exp(res$par[doTransPar])
     return(res)
   }) -> res
+  
+  # TODO: convert to data.frame?
+  # or maybe list of matrices?
+  
+  
+  return(res)
+}
+
+library(parallel)
+
+# Include parallel
+fitIndivBeta_fast_parallel <- function(tree, gene.data, colSpecies = colnames(gene.data), 
+                                  lowerBound = c(theta = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001),
+                                  upperBound = c(theta =  99, sigma2 =   9999, alpha = 999  , beta = 99   ),
+                                  logTransPars = c("alpha","sigma2","beta"),
+                                  cores = 1, fork=F)
+{
+  #Calculate the per gene parameter matrix based on the gene data
+  initPar <- initialParams(gene.data, colSpecies)
+  paramNames <- colnames(initPar)
+  
+  
+  # log transform initial parameters and bounds
+  doTransPar <- paramNames %in% logTransPars # which params to log transform
+  initPar[,doTransPar] <- log(initPar[,doTransPar])
+  lowerBound[logTransPars] <- log(lowerBound[logTransPars])
+  upperBound[logTransPars] <- log(upperBound[logTransPars])
+  
+  # match the column species with the phylogeny tip labels
+  index.expand <- match(colSpecies, tree$tip.label)
+  
+  localEVEmodel <- prepEVEmodel(tree = tree,index.expand = index.expand,
+                                thetaIdx = rep(match("theta",paramNames),Nedge(tree)),
+                                alphaIdx = rep(match("alpha",paramNames),Nedge(tree)),
+                                sigma2Idx = rep(match("sigma2",paramNames),Nedge(tree)),
+                                betaIdx = match("beta",paramNames))
+
+  fitOneGene <- function(row){
+    # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
+    res <- tryCatch({
+      stats::optim(par = initPar[row, ], method = "L-BFGS-B", 
+                   lower = lowerBound, upper = upperBound,
+                   gene.data.row = gene.data[row, ],
+                   fn = function(par, gene.data.row){
+                     # reverse log transform parameters
+                     par[doTransPar] <- exp(par[doTransPar])
+                     
+                     mvnormParams <- localEVEmodel(par)
+                     return(-dmvnorm_nocheck(gene.data.row, sigma = mvnormParams$sigma, mean=mvnormParams$mean))
+                   })
+    }, error = function(e) {
+      warning(paste(e$message, "at gene.data row", row), immediate. = T)
+    })
+    # reverse log transform estimated parameters
+    res$par[doTransPar] <- exp(res$par[doTransPar])
+    return(res)
+  }
+
+  myFunc <- function(row) {localEVEmodel(par = initPar[row,])}
+  
+  
+  if(cores==1){
+    res <- lapply(workers,X = 1:nrow(gene.data), FUN = fitOneGene)
+  } else if(fork){
+    res <- mclapply(mc.cores = cores,X = 1:nrow(gene.data), FUN = fitOneGene)
+  }else{
+    cl <- makeCluster(cores)
+    # Export local environment to worker processes
+    clusterExport(cl, varlist = c(ls(envir = environment()),"dmvnorm_nocheck"),envir = environment())
+    # clusterExport(cl, varlist = c("initPar","gene.data","lowerBound","upperBound","doTransPar","localEVEmodel","dmvnorm_nocheck"),envir = environment())
+    clusterEvalQ(cl, expr = library(ape))
+    res <- parLapply(cl = cl,X = 1:nrow(gene.data), fun = fitOneGene)
+    stopCluster(cl)
+  }
   
   # TODO: convert to data.frame?
   # or maybe list of matrices?

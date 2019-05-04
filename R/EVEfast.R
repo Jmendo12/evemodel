@@ -1,6 +1,6 @@
 prepEVEmodel <- function(tree, index.expand, thetaIdx, alphaIdx, sigma2Idx, betaIdx){
   
-  # Force evaluation of arguments. This helps detect syntax errors in the arguments earlier
+  # Force evaluation of arguments to avoid potential problems with lazy evaluation.
   force(index.expand); force(thetaIdx); force(alphaIdx); force(sigma2Idx); force(betaIdx)
   
   Nnodes <- Ntip(tree) + Nnode(tree)
@@ -23,6 +23,7 @@ prepEVEmodel <- function(tree, index.expand, thetaIdx, alphaIdx, sigma2Idx, beta
   # edges to tip (used to calculate within-species variance)
   tipEdges <- match(1:Ntip(tree),edge[,2])
   
+  # define EVEmodel function to return:
   function( par )
   {
     # vectorise parameters
@@ -39,21 +40,8 @@ prepEVEmodel <- function(tree, index.expand, thetaIdx, alphaIdx, sigma2Idx, beta
     expected.mean[root.index] = thetas[rootEdge]
     evol.variance[root.index] = sigma2s[rootEdge]/(2*alphas[rootEdge])
     
-    # for(i in edgeOrder)
-    # {
-    #   parent.index <- edge[i, 1]
-    #   child.index <- edge[i, 2]
-    #   delta.T <- edge.length[i]
-    #   expected.mean[child.index] <- expected.mean[parent.index] * exp(-alphas[i] * delta.T) +
-    #     thetas[i] * (1 - exp(-alphas[i] * delta.T))
-    #   evol.variance[child.index] <- evol.variance[parent.index] * exp(-2 * alphas[i] * delta.T) +
-    #     sigma2s[i] / (2 * alphas[i]) * (1 - exp(-2 * alphas[i] * delta.T))
-    # }
-    
-    
     # precalculate some expressions
     expAlphaT <- exp(-alphas * edge.length)
-    # expAlphaT2 <- expAlphaT^2  # This introduces some numerical differences, but is slightly faster
     expAlphaT2 <- exp(-2 * alphas * edge.length)
     tmp1 <- thetas * (1 - expAlphaT)
     tmp2 <- sigma2s / (2 * alphas) * (1 - expAlphaT2)
@@ -79,13 +67,10 @@ prepEVEmodel <- function(tree, index.expand, thetaIdx, alphaIdx, sigma2Idx, beta
     # Expand covariance matrix
     sigma <- sigma[index.expand, index.expand]
     # Add within-species variance
-    # diag(sigma) <- diag(sigma) + beta * sigma2s[tipEdges] / (2 * alphas[tipEdges]) # tipEdges should have been expanded
-    diag(sigma) <- diag(sigma)*(1+beta) # is this correct? It gives slight numerical differences that can result in diferrent paramet estimates
+    diag(sigma) <- diag(sigma)*(1+beta) 
 
     # Return expanded sigma and mean (expected values)
     return(list(sigma=sigma, mean = expected.mean[index.expand]))
-    
-    
   }
 }
 
@@ -110,172 +95,3 @@ dmvnorm_nocheck <- function(x, sigma, mean)
 
   logretval
 }
-
-fitIndivBeta_fast <- function(tree, gene.data, colSpecies = colnames(gene.data))
-{
-  #Calculate the per gene parameter matrix based on the gene data
-  initPar <- initialParams(gene.data, colSpecies)
-  params <- colnames(initPar)
-  
-  # match the column species with the phylogeny tip labels
-  index.expand <- match(colSpecies, tree$tip.label)
-  
-  localEVEmodel <- prepEVEmodel(tree = tree,index.expand = index.expand,
-                                thetaIdx = rep(match("theta",params),Nedge(tree)),
-                                alphaIdx = rep(match("alpha",params),Nedge(tree)),
-                                sigma2Idx = rep(match("sigma2",params),Nedge(tree)),
-                                betaIdx = match("beta",params))
-  
-  # Calculate max alpha based on the proportion of variance from covariance
-  alphaMax <- -log(.01) / min(tree$edge.length[tree$edge[,2] <= Ntip(tree)])
-  
-  # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
-  lapply(1:nrow(gene.data), function(row){
-    # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
-    res <- tryCatch({
-      stats::optim(par = initPar[row, ], 
-                   method = "L-BFGS-B", lower = c(-Inf, 1e-10, 1e-10, 1e-10), 
-                   upper = c(Inf, Inf, alphaMax, Inf),
-                   gene.data.row = gene.data[row, ],
-                   fn = function(par, gene.data.row){
-                     mvnormParams <- localEVEmodel(par)
-                     return(-dmvnorm_nocheck(gene.data.row, sigma = mvnormParams$sigma, mean=mvnormParams$mean))
-                   })
-    }, error = function(e) {
-      warning(paste(e$message, "at gene.data row", row), immediate. = T)
-    })
-  }) -> res
-  
-  return(res)
-}
-
-
-# Include log transform and bounds
-fitIndivBeta_fast_log <- function(tree, gene.data, colSpecies = colnames(gene.data), 
-                                  lowerBound = c(theta = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001),
-                                  upperBound = c(theta =  99, sigma2 =   9999, alpha = 999  , beta = 99   ),
-                                  logTransPars = c("alpha","sigma2","beta"))
-{
-  #Calculate the per gene parameter matrix based on the gene data
-  initPar <- initialParams(gene.data, colSpecies)
-  paramNames <- colnames(initPar)
-  
-  
-  # log transform initial parameters and bounds
-  doTransPar <- paramNames %in% logTransPars # which params to log transform
-  initPar[,doTransPar] <- log(initPar[,doTransPar])
-  lowerBound[logTransPars] <- log(lowerBound[logTransPars])
-  upperBound[logTransPars] <- log(upperBound[logTransPars])
-  
-  # match the column species with the phylogeny tip labels
-  index.expand <- match(colSpecies, tree$tip.label)
-  
-  localEVEmodel <- prepEVEmodel(tree = tree,index.expand = index.expand,
-                               thetaIdx = rep(match("theta",paramNames),Nedge(tree)),
-                               alphaIdx = rep(match("alpha",paramNames),Nedge(tree)),
-                               sigma2Idx = rep(match("sigma2",paramNames),Nedge(tree)),
-                               betaIdx = match("beta",paramNames))
-  
-  # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
-  lapply(1:nrow(gene.data), function(row){
-    # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
-    res <- tryCatch({
-      stats::optim(par = initPar[row, ], method = "L-BFGS-B", 
-                   lower = lowerBound, upper = upperBound,
-                   gene.data.row = gene.data[row, ],
-                   fn = function(par, gene.data.row){
-                     # reverse log transform parameters
-                     par[doTransPar] <- exp(par[doTransPar])
-                     
-                     mvnormParams <- localEVEmodel(par)
-                     return(-dmvnorm_nocheck(gene.data.row, sigma = mvnormParams$sigma, mean=mvnormParams$mean))
-                   })
-    }, error = function(e) {
-      warning(paste(e$message, "at gene.data row", row), immediate. = T)
-    })
-    # reverse log transform estimated parameters
-    res$par[doTransPar] <- exp(res$par[doTransPar])
-    return(res)
-  }) -> res
-  
-  # TODO: convert to data.frame?
-  # or maybe list of matrices?
-  
-  
-  return(res)
-}
-
-library(parallel)
-
-# Include parallel
-fitIndivBeta_fast_parallel <- function(tree, gene.data, colSpecies = colnames(gene.data), 
-                                  lowerBound = c(theta = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001),
-                                  upperBound = c(theta =  99, sigma2 =   9999, alpha = 999  , beta = 99   ),
-                                  logTransPars = c("alpha","sigma2","beta"),
-                                  cores = 1, fork=F)
-{
-  #Calculate the per gene parameter matrix based on the gene data
-  initPar <- initialParams(gene.data, colSpecies)
-  paramNames <- colnames(initPar)
-  
-  
-  # log transform initial parameters and bounds
-  doTransPar <- paramNames %in% logTransPars # which params to log transform
-  initPar[,doTransPar] <- log(initPar[,doTransPar])
-  lowerBound[logTransPars] <- log(lowerBound[logTransPars])
-  upperBound[logTransPars] <- log(upperBound[logTransPars])
-  
-  # match the column species with the phylogeny tip labels
-  index.expand <- match(colSpecies, tree$tip.label)
-  
-  localEVEmodel <- prepEVEmodel(tree = tree,index.expand = index.expand,
-                                thetaIdx = rep(match("theta",paramNames),Nedge(tree)),
-                                alphaIdx = rep(match("alpha",paramNames),Nedge(tree)),
-                                sigma2Idx = rep(match("sigma2",paramNames),Nedge(tree)),
-                                betaIdx = match("beta",paramNames))
-
-  fitOneGene <- function(row){
-    # Error handling to catch infinte optim or function values that arise when data with NaN paramters is optimized
-    res <- tryCatch({
-      stats::optim(par = initPar[row, ], method = "L-BFGS-B", 
-                   lower = lowerBound, upper = upperBound,
-                   gene.data.row = gene.data[row, ],
-                   fn = function(par, gene.data.row){
-                     # reverse log transform parameters
-                     par[doTransPar] <- exp(par[doTransPar])
-                     
-                     mvnormParams <- localEVEmodel(par)
-                     return(-dmvnorm_nocheck(gene.data.row, sigma = mvnormParams$sigma, mean=mvnormParams$mean))
-                   })
-    }, error = function(e) {
-      warning(paste(e$message, "at gene.data row", row), immediate. = T)
-    })
-    # reverse log transform estimated parameters
-    res$par[doTransPar] <- exp(res$par[doTransPar])
-    return(res)
-  }
-
-  myFunc <- function(row) {localEVEmodel(par = initPar[row,])}
-  
-  
-  if(cores==1){
-    res <- lapply(workers,X = 1:nrow(gene.data), FUN = fitOneGene)
-  } else if(fork){
-    res <- mclapply(mc.cores = cores,X = 1:nrow(gene.data), FUN = fitOneGene)
-  }else{
-    cl <- makeCluster(cores)
-    # Export local environment to worker processes
-    clusterExport(cl, varlist = c(ls(envir = environment()),"dmvnorm_nocheck"),envir = environment())
-    # clusterExport(cl, varlist = c("initPar","gene.data","lowerBound","upperBound","doTransPar","localEVEmodel","dmvnorm_nocheck"),envir = environment())
-    clusterEvalQ(cl, expr = library(ape))
-    res <- parLapply(cl = cl,X = 1:nrow(gene.data), fun = fitOneGene)
-    stopCluster(cl)
-  }
-  
-  # TODO: convert to data.frame?
-  # or maybe list of matrices?
-  
-  
-  return(res)
-}
-

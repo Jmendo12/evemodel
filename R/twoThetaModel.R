@@ -24,6 +24,22 @@ initParamsTwoTheta <- function(gene.data, colSpecies, shiftSpecies)
   return(cbind(theta1,theta2,sigma2,alpha,beta))
 }
 
+#' Simulate expression data for the two-theta EVE model, i.e. two different thetas assigned to specific edges
+#'
+#' @param n Number of "genes" to simulate
+#' @param tree Phylogeny
+#' @param colSpecies A character vector with same length as columns in returned expression matrix, 
+#' specifying the species, i.e. tip labels in the phylogeny, for the corresponding column.
+#' @param isTheta2edge Logical vector with same length as number of edges in tree specifying whether
+#' the corresponding edge theta parameter should be theta2 (TRUE) or theta1 (FALSE)
+#' @param theta1 Value of the theta1 parameter
+#' @param theta2 Value of the theta2 parameter
+#' @param sigma2 Value of the sigma2 parameter
+#' @param alpha Value of the alpha parameter
+#' @param beta Value of the beta parameter
+#'
+#' @return Matrix of simulated gene expression values with samples in columns and genes in rows
+#' @export
 simTwoTheta <- function( n, tree, colSpecies, isTheta2edge, theta1, theta2, sigma2, alpha, beta){
   Nedges <- Nedge(tree)
   
@@ -34,11 +50,18 @@ simTwoTheta <- function( n, tree, colSpecies, isTheta2edge, theta1, theta2, sigm
                      alphas = rep(alpha,Nedges),sigma2s = rep(sigma2,Nedges),
                      beta = beta, index.expand = index.expand, rootE = theta1, rootVar = beta * sigma2 / (2 * alpha))
   
-  simData <- rmvnorm(n = 100, mean = mvdist$mean, sigma = mvdist$sigma )
+  simData <- rmvnorm(n = n, mean = mvdist$mean, sigma = mvdist$sigma )
   colnames(simData) <- colSpecies
   return(simData)
 }
 
+
+#' @describeIn fitOneTheta Fit model with two different thetas assigned to specific edges
+#' @param isTheta2edge Logical vector with same length as number of edges in tree specifying whether
+#' the corresponding edge theta parameter should be theta2 (TRUE) or theta1 (FALSE)
+#' @param colSpecies A character vector with same length as columns in returned expression matrix, 
+#' specifying the species, i.e. tip labels in the phylogeny, for the corresponding column.
+#' @export
 fitTwoTheta <- function( tree, gene.data, isTheta2edge, colSpecies = colnames(gene.data), 
                          lowerBound = c(theta1 = -99, theta2 = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001),
                          upperBound = c(theta1 =  99, theta2 =  99, sigma2 =   9999, alpha = 999  , beta = 99   ),

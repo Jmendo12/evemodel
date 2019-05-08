@@ -6,6 +6,9 @@
 # Date 2/25/19
 
 
+
+#' @describeIn fitOneTheta Fit model with a given shared beta for all genes
+#' @export
 fitSharedBeta <- function( sharedBeta, tree, gene.data, colSpecies = colnames(gene.data), 
                          lowerBound = c(theta = -99, sigma2 = 0.0001, alpha = 0.001),
                          upperBound = c(theta =  99, sigma2 =   9999, alpha = 999 ),
@@ -78,67 +81,64 @@ fitSharedBeta <- function( sharedBeta, tree, gene.data, colSpecies = colnames(ge
         message = sapply(res,function(x) x$message))
 }
 
-# fitSharedBeta <- function(betaShared, tree, gene.data, colSpecies = colnames(gene.data))
-# {
-#   #Calculate the per gene parameter matrix based on the gene data
-#   initial.param.matrix <- initialParams(gene.data, colSpecies)
-# 
-#   # match the column species with the phylogeny tip labels
-#   index.expand <- match(colSpecies, tree$tip.label)
-#   # Calculate max alpha based on the proportion of variance from covariance
-#   alphaMax <- -log(.01) / min(tree$edge.length[tree$edge[,2] <= Ntip(tree)])
-# 
-# 
-#   # For each gene, optimize the parameters and store the resulting likelihood in the likelihood vector
-#   lapply(1:nrow(gene.data), function(row){
-#     stats::optim( initial.param.matrix[row, 1:3], fn = LLPerGeneSharedBeta, method = "L-BFGS-B",
-#            lower = c(-Inf, 1e-10, 1e-10, 1e-10), upper = c(Inf, Inf, alphaMax, Inf),
-#            betaShared= betaShared,
-#            tree = tree, gene.data.row = gene.data[row, ], index.expand=index.expand)
-#   }) -> res
-# 
-#   return(res)
-# }
-
-LLSharedBeta <- function(betaShared, ...)
-{
-  cat("LLSharedBeta: beta =",betaShared)
-
-  resSharedBeta <- fitSharedBeta(betaShared, ...)
-
-  sumLL <- sum(resSharedBeta$ll)
-
-  nNotConverged <- sum(resSharedBeta$convergence!=0)
-
-  if( nNotConverged>0 ){
-    cat("  ",nNotConverged,"gene(s) did not converge!")
-  }
-
-  cat("  LL =",sumLL,"\n")
-
-  # return -sum of LL for all genes
-  return(-sumLL)
-}
 
 
-betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data)){
+
+
+#' Beta shared test
+#'
+#' @param tree Species phylogeny (phylo object)
+#' @param gene.data A matrix of expression values with samples in columns and genes in rows
+#' @param colSpecies A character vector with same length as columns in gene.data, specifying the
+#' species for the corresponding column.
+#' @param cores Number of parallel processes to run
+#'
+#' @return List with:
+#' \itemize{
+#'   \item indivBetaRes: results from \code{\link{fitOneTheta}}
+#'   \item sharedBetaRes: results from \code{\link{fitSharedBeta}}
+#'   \item sharedBeta: the estimated shared beta parameter
+#'   \item LRT: log likelihood ratio test statistic between the individual and shared beta model
+#' }
+#' @export
+betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data), cores = 1){
   cat("fit with individual betas...\n")
-  indivBetaRes <- fitOneTheta(tree,gene.data,colSpecies)
+  indivBetaRes <- fitOneTheta(tree,gene.data,colSpecies,cores = cores)
 
+  LLSharedBeta <- function(betaShared, ...)
+  {
+    cat("LLSharedBeta: beta =",betaShared)
+    
+    resSharedBeta <- fitSharedBeta(betaShared, ...)
+    
+    sumLL <- sum(resSharedBeta$ll)
+    
+    nNotConverged <- sum(resSharedBeta$convergence!=0)
+    
+    if( nNotConverged>0 ){
+      cat("  ",nNotConverged,"gene(s) did not converge!")
+    }
+    
+    cat("  LL =",sumLL,"\n")
+    
+    # return -sum of LL for all genes
+    return(-sumLL)
+  }
+  
   cat("Estimate shared beta...\n")
   sharedBetaFit <- stats::optimize(f = LLSharedBeta,interval=c(0.0001,100),
-                            tree=tree, gene.data=gene.data)
+                            tree=tree, gene.data=gene.data, cores = cores)
   sharedBeta <- sharedBetaFit$minimum
 
   cat("fit with shared beta =",sharedBeta,"...\n")
-  sharedBetaRes <- fitSharedBeta(sharedBeta, tree, gene.data, colSpecies)
+  sharedBetaRes <- fitSharedBeta(sharedBeta, tree, gene.data, colSpecies, cores = cores)
 
   # calculate likelihood ratio test statistic
   LRT <- 2 * (indivBetaRes$ll - sharedBetaRes$ll)
 
 
   return( list(indivBetaRes = indivBetaRes,
-               sharedBeta = sharedBeta,
                sharedBetaRes = sharedBetaRes,
+               sharedBeta = sharedBeta,
                LRT = LRT) )
 }

@@ -5,6 +5,8 @@
 #' species for the corresponding column.
 #'
 #' @return A matrix of initial parameters with the four parameters theta, sigma2, alpha and beta in columns and genes in rows
+#' 
+#' @importFrom stats var
 initParamsOneTheta <- function(gene.data, colSpecies)
 {
   colSpeciesIndices <- split(seq_along(colSpecies), f = colSpecies)
@@ -19,6 +21,15 @@ initParamsOneTheta <- function(gene.data, colSpecies)
   return(cbind(theta,sigma2,alpha,beta))
 }
 
+#' Simulate expression data for the one-theta EVE model, i.e. same parameters on all edges
+#'
+#' @inheritParams simTwoTheta
+#' @param theta Value of the theta parameter
+#'
+#' @return Matrix of simulated gene expression values with samples in columns and genes in rows
+#' @export
+#' @import mvtnorm
+#' @importFrom stats setNames
 simOneTheta <- function( n, tree, colSpecies, theta, sigma2, alpha, beta){
   Nedges <- Nedge(tree)
   
@@ -27,11 +38,32 @@ simOneTheta <- function( n, tree, colSpecies, theta, sigma2, alpha, beta){
   mvdist <- EVEmodel(tree = tree, thetas = rep(theta,Nedges),alphas = rep(alpha,Nedges),sigma2s = rep(sigma2,Nedges),
                       beta = beta, index.expand = index.expand, rootE = theta, rootVar = beta * sigma2 / (2 * alpha))
   
-  simData <- rmvnorm(n = 100, mean = mvdist$mean, sigma = mvdist$sigma )
+  simData <- rmvnorm(n = n, mean = mvdist$mean, sigma = mvdist$sigma )
   colnames(simData) <- colSpecies
   return(simData)
 }
 
+#' Fit the maximum likelihood estimate of the parameters for a specific EVE model
+#'
+#' @param tree Phylogeny
+#' @param gene.data A matrix of expression values with samples in columns and genes in rows
+#' @param lowerBound A named numeric vector of the lower bound for the estimated parameters
+#' @param upperBound A named numeric vector of the upper bound for the estimated parameters
+#' @param logTransPars A character vector with the names of the parameters that will be log transformed
+#' @param cores Number of parallel processes to run
+#' @param fork Use forking for parallel execution
+#' @param sharedBeta the shared beta parameter
+#'
+#' @return A list with:
+#' \describe{
+#'   \item{par}{A matrix with the parameter estimates}
+#'   \item{ll}{The log likelihood for each estimate}
+#'   \item{iterations}{Number of iterations of the optimisation routine before reaching the estimate}
+#'   \item{convergence}{Error code from the \code{\link[stats]{optim}} function. 0 means convergence.}
+#'   \item{message}{Error message from the \code{\link[stats]{optim}} function.}
+#' }
+#' @export
+#' @import parallel
 fitOneTheta <- function( tree, gene.data, colSpecies = colnames(gene.data), 
                          lowerBound = c(theta = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001),
                          upperBound = c(theta =  99, sigma2 =   9999, alpha = 999  , beta = 99   ),

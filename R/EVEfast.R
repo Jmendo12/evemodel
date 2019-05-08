@@ -1,3 +1,14 @@
+#' Generate a EVEmodel function with pre-computed data for faster execution
+#'
+#' @inheritParams EVEmodel
+#' @param thetaIdx Vector of integers holding the index of the theta parameter for each edge
+#' @param alphaIdx Vector of integers holding the index of the alpha parameter for each edge
+#' @param sigma2Idx Vector of integers holding the index of the sigma2 parameter for each edge
+#' @param betaIdx Vector of integers holding the index of the beta parameter
+#'
+#' @return a function with a single parameter holding a vector of parameters
+#' @export
+#' @import ape
 prepEVEmodel <- function(tree, index.expand, thetaIdx, alphaIdx, sigma2Idx, betaIdx){
   
   # Force evaluation of arguments to avoid potential problems with lazy evaluation.
@@ -74,6 +85,16 @@ prepEVEmodel <- function(tree, index.expand, thetaIdx, alphaIdx, sigma2Idx, beta
   }
 }
 
+#' Faster multivariate normal density calculation
+#'
+#' This is the same as \code{\link[mvtnorm]{dmvnorm}} except with no check on input parameters to run faster.
+#'
+#' @param x vector or matrix of values
+#' @param sigma covariance matrix
+#' @param mean mean vector
+#'
+#' @return log P-value
+#' @export
 dmvnorm_nocheck <- function(x, sigma, mean)
 {
   if (is.vector(x)) 

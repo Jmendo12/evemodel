@@ -1,3 +1,12 @@
+#' Get the edges for a clade in a phylogeny given the tips
+#' 
+#'
+#' @param tree Phylogeny
+#' @param tips Name of the tips that defines the clade
+#' @param includeEdgeToMRCA If TRUE, also include the edge leading to the root of the clade
+#'
+#' @return vector of edge indices
+#' @export
 getEdgesFromMRCA <- function(tree, tips, includeEdgeToMRCA){
   mrcaNode <- ape::getMRCA(tree, tips)
   

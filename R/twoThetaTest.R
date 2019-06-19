@@ -21,9 +21,9 @@
 twoThetaTest <- function(tree, gene.data, isTheta2edge, colSpecies = colnames(gene.data), ...){
 
   cat("Fit with single theta...\n") 
-  oneThetaRes <- fitOneTheta(tree, gene.data, ...)
+  oneThetaRes <- fitOneTheta(tree, gene.data, colSpecies = colSpecies, ...)
   cat("Fit with two thetas...\n")
-  twoThetaRes <- fitTwoTheta(tree, gene.data,isTheta2edge = isTheta2edge, ...)
+  twoThetaRes <- fitTwoTheta(tree, gene.data,isTheta2edge = isTheta2edge, colSpecies = colSpecies, ...)
   
   LRT <- 2 * (twoThetaRes$ll - oneThetaRes$ll)
   

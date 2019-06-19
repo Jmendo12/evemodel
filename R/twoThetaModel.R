@@ -15,11 +15,11 @@ initParamsTwoTheta <- function(gene.data, colSpecies, shiftSpecies)
   
   nonShiftSpecies <- setdiff(colnames(species.mean),shiftSpecies)
   
-  theta1 <- rowMeans(species.mean[ ,nonShiftSpecies])
-  theta2 <- rowMeans(species.mean[ ,shiftSpecies])
-  sigma2 <- apply(species.mean,1,var)
+  theta1 <- rowMeans(species.mean[ ,nonShiftSpecies],na.rm=T)
+  theta2 <- rowMeans(species.mean[ ,shiftSpecies],na.rm=T)
+  sigma2 <- apply(species.mean,1,var,na.rm=T)
   alpha <- .5
-  beta <- rowMeans(species.var) / sigma2
+  beta <- rowMeans(species.var,na.rm=T) / sigma2
   
   return(cbind(theta1,theta2,sigma2,alpha,beta))
 }
@@ -102,7 +102,11 @@ fitTwoTheta <- function( tree, gene.data, isTheta2edge, colSpecies = colnames(ge
                      par[doTransPar] <- exp(par[doTransPar])
                      
                      mvnormParams <- localEVEmodel(par)
-                     return(-dmvnorm_nocheck(gene.data.row, sigma = mvnormParams$sigma, mean=mvnormParams$mean))
+                     
+                     # ignore species with NA in the expression matrix
+                     notNA <- !is.na(gene.data.row)
+                     return(-dmvnorm_nocheck(gene.data.row[notNA], sigma = mvnormParams$sigma[notNA,notNA], 
+                                             mean=mvnormParams$mean[notNA]))
                    })
     }, error = function(e) {
       warning(paste(e$message, "at gene.data row", row), immediate. = T)

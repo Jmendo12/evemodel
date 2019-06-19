@@ -46,7 +46,11 @@ fitSharedBeta <- function( sharedBeta, tree, gene.data, colSpecies = colnames(ge
                      par[doTransPar] <- exp(par[doTransPar])
                      
                      mvnormParams <- localEVEmodel(c(par, sharedBeta))
-                     return(-dmvnorm_nocheck(gene.data.row, sigma = mvnormParams$sigma, mean=mvnormParams$mean))
+                     
+                     # ignore species with NA in the expression matrix
+                     notNA <- !is.na(gene.data.row)
+                     return(-dmvnorm_nocheck(gene.data.row[notNA], sigma = mvnormParams$sigma[notNA,notNA], 
+                                             mean=mvnormParams$mean[notNA]))
                    })
     }, error = function(e) {
       warning(paste(e$message, "at gene.data row", row), immediate. = T)
@@ -127,7 +131,7 @@ betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data), co
   
   cat("Estimate shared beta...\n")
   sharedBetaFit <- stats::optimize(f = LLSharedBeta,interval=c(0.0001,100),
-                            tree=tree, gene.data=gene.data, cores = cores)
+                            tree=tree, gene.data=gene.data, cores = cores, colSpecies=colSpecies)
   sharedBeta <- sharedBetaFit$minimum
 
   cat("fit with shared beta =",sharedBeta,"...\n")

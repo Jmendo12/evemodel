@@ -13,10 +13,10 @@ initParamsOneTheta <- function(gene.data, colSpecies)
   species.mean <- sapply(colSpeciesIndices, function(i){ rowMeans(gene.data[,i]) })
   species.var <- sapply(colSpeciesIndices, function(i){ apply(gene.data[,i],1,var) })
   
-  theta <- rowMeans(species.mean)
-  sigma2 <- apply(species.mean,1,var)
+  theta <- rowMeans(species.mean,na.rm = T)
+  sigma2 <- apply(species.mean,1,var,na.rm = T)
   alpha <- .5
-  beta <- rowMeans(species.var) / sigma2
+  beta <- rowMeans(species.var,na.rm = T) / sigma2
   
   return(cbind(theta,sigma2,alpha,beta))
 }
@@ -101,7 +101,11 @@ fitOneTheta <- function( tree, gene.data, colSpecies = colnames(gene.data),
                      par[doTransPar] <- exp(par[doTransPar])
                      
                      mvnormParams <- localEVEmodel(par)
-                     return(-dmvnorm_nocheck(gene.data.row, sigma = mvnormParams$sigma, mean=mvnormParams$mean))
+                     
+                     # ignore species with NA in the expression matrix
+                     notNA <- !is.na(gene.data.row)
+                     return(-dmvnorm_nocheck(gene.data.row[notNA], sigma = mvnormParams$sigma[notNA,notNA], 
+                                             mean=mvnormParams$mean[notNA]))
                    })
     }, error = function(e) {
       warning(paste(e$message, "at gene.data row", row), immediate. = T)

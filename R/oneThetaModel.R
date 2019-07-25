@@ -47,6 +47,7 @@ simOneTheta <- function( n, tree, colSpecies, theta, sigma2, alpha, beta){
 #'
 #' @param tree Phylogeny
 #' @param gene.data A matrix of expression values with samples in columns and genes in rows
+#' @param extra.var An optional matrix of technical variance for each expression value. Same dimensions as gene.data (default=NULL)
 #' @param lowerBound A named numeric vector of the lower bound for the estimated parameters
 #' @param upperBound A named numeric vector of the upper bound for the estimated parameters
 #' @param logTransPars A character vector with the names of the parameters that will be log transformed
@@ -65,6 +66,7 @@ simOneTheta <- function( n, tree, colSpecies, theta, sigma2, alpha, beta){
 #' @export
 #' @import parallel
 fitOneTheta <- function( tree, gene.data, colSpecies = colnames(gene.data), 
+                         extra.var = NULL,
                          lowerBound = c(theta = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001),
                          upperBound = c(theta =  99, sigma2 =   9999, alpha = 999  , beta = 99   ),
                          logTransPars = c("alpha","sigma2","beta"),
@@ -96,12 +98,17 @@ fitOneTheta <- function( tree, gene.data, colSpecies = colnames(gene.data),
       stats::optim(par = initPar[row, ], method = "L-BFGS-B", 
                    lower = lowerBound, upper = upperBound,
                    gene.data.row = gene.data[row, ],
-                   fn = function(par, gene.data.row){
+                   extra.var.row = if(is.null(extra.var)) NULL else extra.var[row, ],
+                   fn = function(par, gene.data.row, extra.var.row){
                      # reverse log transform parameters
                      par[doTransPar] <- exp(par[doTransPar])
                      
                      mvnormParams <- localEVEmodel(par)
-                     
+
+                     # Add extra variance (if given)
+                     if( !is.null(extra.var) )
+                       diag(mvnormParams$sigma) <- diag(mvnormParams$sigma) +  extra.var.row
+
                      # ignore species with NA in the expression matrix
                      notNA <- !is.na(gene.data.row)
                      return(-dmvnorm_nocheck(gene.data.row[notNA], sigma = mvnormParams$sigma[notNA,notNA], 

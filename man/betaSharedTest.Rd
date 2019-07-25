@@ -4,8 +4,7 @@
 \alias{betaSharedTest}
 \title{Beta shared test}
 \usage{
-betaSharedTest(tree, gene.data, colSpecies = colnames(gene.data),
-  cores = 1)
+betaSharedTest(tree, gene.data, colSpecies = colnames(gene.data), ...)
 }
 \arguments{
 \item{tree}{Species phylogeny (phylo object)}
@@ -15,7 +14,7 @@ betaSharedTest(tree, gene.data, colSpecies = colnames(gene.data),
 \item{colSpecies}{A character vector with same length as columns in gene.data, specifying the
 species for the corresponding column.}
 
-\item{cores}{Number of parallel processes to run}
+\item{...}{Parameters passed to \code{\link{fitOneTheta}} and \code{\link{fitSharedBeta}}}
 }
 \value{
 List with:

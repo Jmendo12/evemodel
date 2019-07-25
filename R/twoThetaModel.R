@@ -63,6 +63,7 @@ simTwoTheta <- function( n, tree, colSpecies, isTheta2edge, theta1, theta2, sigm
 #' specifying the species, i.e. tip labels in the phylogeny, for the corresponding column.
 #' @export
 fitTwoTheta <- function( tree, gene.data, isTheta2edge, colSpecies = colnames(gene.data), 
+                         extra.var = NULL,
                          lowerBound = c(theta1 = -99, theta2 = -99, sigma2 = 0.0001, alpha = 0.001, beta = 0.001),
                          upperBound = c(theta1 =  99, theta2 =  99, sigma2 =   9999, alpha = 999  , beta = 99   ),
                          logTransPars = c("alpha","sigma2","beta"),
@@ -97,11 +98,16 @@ fitTwoTheta <- function( tree, gene.data, isTheta2edge, colSpecies = colnames(ge
       stats::optim(par = initPar[row, ], method = "L-BFGS-B", 
                    lower = lowerBound, upper = upperBound,
                    gene.data.row = gene.data[row, ],
-                   fn = function(par, gene.data.row){
+                   extra.var.row = if(is.null(extra.var)) NULL else extra.var[row, ],
+                   fn = function(par, gene.data.row, extra.var.row){
                      # reverse log transform parameters
                      par[doTransPar] <- exp(par[doTransPar])
                      
                      mvnormParams <- localEVEmodel(par)
+                     
+                     # Add extra variance (if given)
+                     if( !is.null(extra.var) )
+                       diag(mvnormParams$sigma) <- diag(mvnormParams$sigma) +  extra.var.row
                      
                      # ignore species with NA in the expression matrix
                      notNA <- !is.na(gene.data.row)

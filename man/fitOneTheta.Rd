@@ -8,23 +8,23 @@
 \title{Fit the maximum likelihood estimate of the parameters for a specific EVE model}
 \usage{
 fitSharedBeta(sharedBeta, tree, gene.data,
-  colSpecies = colnames(gene.data), lowerBound = c(theta = -99, sigma2
-  = 1e-04, alpha = 0.001), upperBound = c(theta = 99, sigma2 = 9999,
-  alpha = 999), logTransPars = c("alpha", "sigma2", "beta"), cores = 1,
-  fork = F)
+  colSpecies = colnames(gene.data), extra.var = NULL,
+  lowerBound = c(theta = -99, sigma2 = 1e-04, alpha = 0.001),
+  upperBound = c(theta = 99, sigma2 = 9999, alpha = 999),
+  logTransPars = c("alpha", "sigma2", "beta"), cores = 1, fork = F)
 
 fitOneTheta(tree, gene.data, colSpecies = colnames(gene.data),
-  lowerBound = c(theta = -99, sigma2 = 1e-04, alpha = 0.001, beta =
-  0.001), upperBound = c(theta = 99, sigma2 = 9999, alpha = 999, beta =
-  99), logTransPars = c("alpha", "sigma2", "beta"), cores = 1,
-  fork = F)
+  extra.var = NULL, lowerBound = c(theta = -99, sigma2 = 1e-04, alpha =
+  0.001, beta = 0.001), upperBound = c(theta = 99, sigma2 = 9999, alpha =
+  999, beta = 99), logTransPars = c("alpha", "sigma2", "beta"),
+  cores = 1, fork = F)
 
 fitTwoTheta(tree, gene.data, isTheta2edge,
-  colSpecies = colnames(gene.data), lowerBound = c(theta1 = -99, theta2
-  = -99, sigma2 = 1e-04, alpha = 0.001, beta = 0.001),
-  upperBound = c(theta1 = 99, theta2 = 99, sigma2 = 9999, alpha = 999,
-  beta = 99), logTransPars = c("alpha", "sigma2", "beta"), cores = 1,
-  fork = F)
+  colSpecies = colnames(gene.data), extra.var = NULL,
+  lowerBound = c(theta1 = -99, theta2 = -99, sigma2 = 1e-04, alpha =
+  0.001, beta = 0.001), upperBound = c(theta1 = 99, theta2 = 99, sigma2 =
+  9999, alpha = 999, beta = 99), logTransPars = c("alpha", "sigma2",
+  "beta"), cores = 1, fork = F)
 }
 \arguments{
 \item{sharedBeta}{the shared beta parameter}
@@ -35,6 +35,8 @@ fitTwoTheta(tree, gene.data, isTheta2edge,
 
 \item{colSpecies}{A character vector with same length as columns in returned expression matrix, 
 specifying the species, i.e. tip labels in the phylogeny, for the corresponding column.}
+
+\item{extra.var}{An optional matrix of technical variance for each expression value. Same dimensions as gene.data (default=NULL)}
 
 \item{lowerBound}{A named numeric vector of the lower bound for the estimated parameters}
 

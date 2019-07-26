@@ -10,6 +10,7 @@
 #' @describeIn fitOneTheta Fit model with a given shared beta for all genes
 #' @export
 fitSharedBeta <- function( sharedBeta, tree, gene.data, colSpecies = colnames(gene.data), 
+                           extra.var = NULL,
                          lowerBound = c(theta = -99, sigma2 = 0.0001, alpha = 0.001),
                          upperBound = c(theta =  99, sigma2 =   9999, alpha = 999 ),
                          logTransPars = c("alpha","sigma2","beta"),
@@ -41,11 +42,16 @@ fitSharedBeta <- function( sharedBeta, tree, gene.data, colSpecies = colnames(ge
       stats::optim(par = initPar[row, ], method = "L-BFGS-B", 
                    lower = lowerBound, upper = upperBound,
                    gene.data.row = gene.data[row, ],
-                   fn = function(par, gene.data.row){
+                   extra.var.row = if(is.null(extra.var)) NULL else extra.var[row, ],
+                   fn = function(par, gene.data.row, extra.var.row){
                      # reverse log transform parameters
                      par[doTransPar] <- exp(par[doTransPar])
                      
                      mvnormParams <- localEVEmodel(c(par, sharedBeta))
+                     
+                     # Add extra variance (if given)
+                     if( !is.null(extra.var) )
+                      diag(mvnormParams$sigma) <- diag(mvnormParams$sigma) +  extra.var.row
                      
                      # ignore species with NA in the expression matrix
                      notNA <- !is.na(gene.data.row)
@@ -95,7 +101,7 @@ fitSharedBeta <- function( sharedBeta, tree, gene.data, colSpecies = colnames(ge
 #' @param gene.data A matrix of expression values with samples in columns and genes in rows
 #' @param colSpecies A character vector with same length as columns in gene.data, specifying the
 #' species for the corresponding column.
-#' @param cores Number of parallel processes to run
+#' @param ... Parameters passed to \code{\link{fitOneTheta}} and \code{\link{fitSharedBeta}}
 #'
 #' @return List with:
 #' \itemize{
@@ -105,9 +111,9 @@ fitSharedBeta <- function( sharedBeta, tree, gene.data, colSpecies = colnames(ge
 #'   \item LRT: log likelihood ratio test statistic between the individual and shared beta model
 #' }
 #' @export
-betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data), cores = 1){
+betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data), ...){
   cat("fit with individual betas...\n")
-  indivBetaRes <- fitOneTheta(tree,gene.data,colSpecies,cores = cores)
+  indivBetaRes <- fitOneTheta(tree,gene.data,colSpecies, ...)
 
   LLSharedBeta <- function(betaShared, ...)
   {
@@ -131,11 +137,11 @@ betaSharedTest <- function(tree, gene.data, colSpecies = colnames(gene.data), co
   
   cat("Estimate shared beta...\n")
   sharedBetaFit <- stats::optimize(f = LLSharedBeta,interval=c(0.0001,100),
-                            tree=tree, gene.data=gene.data, cores = cores, colSpecies=colSpecies)
+                            tree=tree, gene.data=gene.data, colSpecies=colSpecies, ...)
   sharedBeta <- sharedBetaFit$minimum
 
   cat("fit with shared beta =",sharedBeta,"...\n")
-  sharedBetaRes <- fitSharedBeta(sharedBeta, tree, gene.data, colSpecies, cores = cores)
+  sharedBetaRes <- fitSharedBeta(sharedBeta, tree, gene.data, colSpecies, ...)
 
   # calculate likelihood ratio test statistic
   LRT <- 2 * (indivBetaRes$ll - sharedBetaRes$ll)

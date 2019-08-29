@@ -9,14 +9,14 @@
 initParamsTwoTheta <- function(gene.data, colSpecies, shiftSpecies)
 {
   colSpeciesIndices <- split(seq_along(colSpecies), f = colSpecies)
-  species.mean <- sapply(colSpeciesIndices, function(i){ rowMeans(gene.data[,i]) })
-  species.var <- sapply(colSpeciesIndices, function(i){ apply(gene.data[,i],1,var) })
+  species.mean <- sapply(colSpeciesIndices, function(i){ rowMeans(gene.data[,i, drop=F]) })
+  species.var <- sapply(colSpeciesIndices, function(i){ apply(gene.data[,i, drop=F],1,var) })
   
   
   nonShiftSpecies <- setdiff(colnames(species.mean),shiftSpecies)
   
-  theta1 <- rowMeans(species.mean[ ,nonShiftSpecies],na.rm=T)
-  theta2 <- rowMeans(species.mean[ ,shiftSpecies],na.rm=T)
+  theta1 <- rowMeans(species.mean[ ,nonShiftSpecies, drop=F],na.rm=T)
+  theta2 <- rowMeans(species.mean[ ,shiftSpecies, drop=F],na.rm=T)
   sigma2 <- apply(species.mean,1,var,na.rm=T)
   alpha <- .5
   beta <- rowMeans(species.var,na.rm=T) / sigma2

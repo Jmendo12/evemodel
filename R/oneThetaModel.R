@@ -10,8 +10,8 @@
 initParamsOneTheta <- function(gene.data, colSpecies)
 {
   colSpeciesIndices <- split(seq_along(colSpecies), f = colSpecies)
-  species.mean <- sapply(colSpeciesIndices, function(i){ rowMeans(gene.data[,i]) })
-  species.var <- sapply(colSpeciesIndices, function(i){ apply(gene.data[,i],1,var) })
+  species.mean <- sapply(colSpeciesIndices, function(i){ rowMeans(gene.data[ ,i, drop=F]) })
+  species.var <- sapply(colSpeciesIndices, function(i){ apply(gene.data[ ,i, drop=F],1,var) })
   
   theta <- rowMeans(species.mean,na.rm = T)
   sigma2 <- apply(species.mean,1,var,na.rm = T)

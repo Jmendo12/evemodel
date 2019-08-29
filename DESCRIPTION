@@ -1,7 +1,7 @@
 Package: evemodel
 Type: Package
 Title: Expression Variance Evolution Model
-Version: 0.0.0.9003
+Version: 0.0.0.9004
 Authors@R: c(
     person("Rori", "Rohlfs", email = "rrohlfs@gmail.com", role = c("aut")),
     person("Lars", "Gronvold", email = "lars.gronvold@nmbu.no", role = c("aut", "cre")),

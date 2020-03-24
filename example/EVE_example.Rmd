@@ -1,0 +1,174 @@
+---
+title: "Using the evemodel package"
+output: html_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(evemodel)
+```
+
+
+## Input data
+
+### example expression data
+
+The given example data is based on RNAseq expression from 7 species with 3-4 individuals per species. Each row corresponds to a group of orthologous genes with exactly one gene per species. The gene expression levels have already been normalized across species and been log transformed (log2(0.01 + TPM)). 
+
+```{r}
+# read tab separated table
+exprTbl <- read.delim("exprTbl.tsv")
+
+head(exprTbl)
+```
+
+The table needs to be converted to a matrix:
+
+```{r}
+# The first column in the table is the ortholog group ID
+# which will be the rownames of the matrix.
+# TODO: The rownames are currently not returned in the results, but they should.
+exprMat <- as.matrix(exprTbl[,-1])
+rownames(exprMat) <- exprTbl$ID
+```
+
+### Species phylogeny
+
+The species phylogy is in Newick format which can be read using the `read.tree` function in the `ape` package:
+
+```{r}
+library(ape)
+
+speciesTree <- read.tree("speciesTree.nwk")
+
+# plot the species tree
+plot(speciesTree)
+add.scale.bar(x=0,y=7,length = 0.1)
+```
+
+### Mapping species in tree to the columns in the expression matrix
+
+The `evemodel` methods needs to know which species each column in the expression matrix belongs to. This is done by creating a vector of species names corresponding to the tip labels in the species tree.
+
+```{r}
+# the species names in the tree is given by the tip.labels
+speciesTree$tip.label
+
+# the columns in the expression matrix are:
+colnames(exprMat)
+
+# remove the trailing number so that we get a vector with the species for each column
+colSpecies <- sub("_.*$","",colnames(exprMat))
+
+colSpecies
+```
+
+## Running the beta shared test
+
+The beta shared test, (a.k.a. phylogenetic ANOVA), can detect genes with increased or decreased ratios of expression divergence to diversity (this ratio is the beta parameter). The model can be used for purposes such as identifying genes with high expression divergence between species as candidates for expression level adaptation, and genes with high expression diversity within species as candidates for expression level conservation and or plasticity.
+
+This works by finding a shared beta that gives the maximum likelihood across all genes and comparing that to the model where the beta is fitted to each individual gene.
+
+```{r runTest, cache=TRUE}
+res <- betaSharedTest(tree = speciesTree, gene.data = exprMat, colSpecies = colSpecies)
+```
+
+### results: LRT
+
+The log likelihood ratio between the individual and shared beta fit indicates whether the individual beta was a better fit, i.e. the gene has an increased or decreased ratios of expression divergence to diversity. The log likelihood ratio test statistic is given `LRT` in the returned result and should follow a chi-squared distribution with one degree of freedom.
+
+```{r}
+# plot likelihood ratio test statistic histogram
+hist(res$LRT,freq = F)
+
+# Plot the chi-squared distribution with one degree of freedom
+x = seq(0.5,10,length.out = 100)
+y = dchisq(x,df = 1)
+lines(x,y,col="red")
+```
+
+P-value can then be calculated using:
+
+```{r}
+pval = pchisq(res$LRT,df = 1,lower.tail = F)
+```
+
+### Result: fitted parameters
+
+The shared beta:
+
+```{r}
+res$sharedBeta
+```
+
+The parameters for each gene given shared beta:
+
+```{r}
+head(res$sharedBetaRes$par)
+```
+
+The parameters for each gene given individual beta:
+
+```{r}
+head(res$indivBetaRes$par)
+```
+
+Note that, with the exception of theta, the fitted parameters are rather unstable
+
+## Simulating data
+
+Given a set of parameters it is possible to simulate gene expression.
+
+### But what are reasonable parameters??
+
+Let's see what the median parameters from the fitted results looks like:
+
+```{r}
+# get median of each parameter
+apply(res$indivBetaRes$par,2,median)
+```
+
+The theta should reflect the typical expression level of a gene and looks reasonable.
+
+The steady state divergence given by $\frac{\sigma^2}{2 \alpha}$ corresponds the variance between the species means of two distantly related species (no covariance of species mean). The scale of this variance depends on the scale of your input data. For example, the given example data uses log2(0.01 + TPM) which gives values in the range of -6 to 16 that informs us of the practical upper limit to the variance. Plugging in the median fitted parameters gives 
+$\frac{\sigma^2}{2 \alpha} \approx 2$
+which is reasonable.
+
+The beta parameter gives the ratio of within-species variance (diversity) to the divergence. The shared beta was estimated at around 0.2 while the median was around 0.35. Plugging that in to the formula $\beta\frac{\sigma^2}{2 \alpha}$, gives a within-species variance in the range of 0.4 and 0.7 which is reasonable.
+
+The alpha parameter depends on the scale of the species tree. $e^{-\alpha d}$ where $d$ is the distance between two species in the tree tells us the proportion of shared variance. The two closest species have $d=0.015$ which gives around $e^{-\alpha d} \approx 0.7$ when $\alpha=27$, i.e. about 70% of between-variance is shared between these species. However, alpha where to ten times higher, this would only be around 1% and the phylogeny would not give much information as all the species are completely diverged (i.e species means are random). On the other end of the scale, e.g. if alpha was $\alpha=0.01$, the phylogeny is also not informative as even the most different species would diverge at all (i.e all have the same species mean). Meaningfull values of alpha should therefore be in that range (0.01 to 300)
+
+### Run simulation
+
+Now that we have some idea of what parameters are reasonable, we can simulate a set of genes with some chosen parameters:
+
+```{r}
+set.seed(123) # we want the same simulation each time...
+
+simData <- 
+  simOneTheta(n = 100, tree = speciesTree, colSpecies = colSpecies,
+              theta = 2, sigma2 = 100, alpha = 25, beta = 0.3)
+```
+
+### Test simulated data
+
+The simulated data can then be used to run the beta shared test again:
+
+```{r runTestSim, cache=TRUE}
+resSim <- betaSharedTest(tree = speciesTree, gene.data = simData, colSpecies = colSpecies)
+```
+
+The log likelihood ratio should follow a chi-squared distribution with one degree of freedom: 
+
+```{r}
+# plot likelihood ratio test statistic histogram
+hist(resSim$LRT,freq = F)
+
+# Plot the chi-squared distribution with one degree of freedom
+x = seq(0.2,10,length.out = 100)
+y = dchisq(x,df = 1)
+lines(x,y,col="red")
+```

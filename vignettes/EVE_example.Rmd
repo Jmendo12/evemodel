@@ -1,12 +1,19 @@
 ---
 title: "Using the evemodel package"
-output: html_document
-editor_options: 
-  chunk_output_type: console
+author: "Lars Grønvold"
+date: "`r Sys.Date()`"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Using the evemodel package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
 
 library(evemodel)
 ```
@@ -20,7 +27,7 @@ The given example data is based on RNAseq expression from 7 species with 3-4 ind
 
 ```{r}
 # read tab separated table
-exprTbl <- read.delim("exprTbl.tsv")
+exprTbl <- read.delim(system.file("extdata", "exprTbl.tsv", package = "evemodel"))
 
 head(exprTbl)
 ```
@@ -42,7 +49,7 @@ The species phylogy is in Newick format which can be read using the `read.tree` 
 ```{r}
 library(ape)
 
-speciesTree <- read.tree("speciesTree.nwk")
+speciesTree <- read.tree(system.file("extdata", "speciesTree.nwk", package = "evemodel"))
 
 # plot the species tree
 plot(speciesTree)

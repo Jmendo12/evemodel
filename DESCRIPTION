@@ -1,10 +1,10 @@
 Package: evemodel
 Type: Package
 Title: Expression Variance Evolution Model
-Version: 0.0.0.9004
+Version: 0.0.0.9005
 Authors@R: c(
-    person("Rori", "Rohlfs", email = "rrohlfs@gmail.com", role = c("aut")),
     person("Lars", "Gronvold", email = "lars.gronvold@nmbu.no", role = c("aut", "cre")),
+    person("Rori", "Rohlfs", email = "rrohlfs@gmail.com", role = c("aut")),
     person("John", "Mendoza", email = "jmendo12@mail.sfsu.edu", role = "aut"))
 URL: https://github.com/Jmendo12/evemodel
 Imports:
@@ -12,6 +12,7 @@ Imports:
     mvtnorm (>= 1.0-4),
     stats (>= 3.5.1),
     parallel
+Suggests: knitr, rmarkdown
 Description: An implementation of the Expression variance evolution model in R.
     The EVE Model provides a new method for joint analyses of quantitative traits
     within and between species. The model parametrizes the ratio of population to
@@ -29,3 +30,4 @@ License: MIT + file LICENSE
 Encoding: UTF-8
 LazyData: false
 RoxygenNote: 6.1.1
+VignetteBuilder: knitr
